@@ -1,0 +1,13 @@
+##gff-version 3
+chr1	ensembl	gene	1000	5000	.	+	.	ID=gene:ENSG00000001;Name=BRCA1;biotype=protein_coding
+chr1	ensembl	mRNA	1000	5000	.	+	.	ID=transcript:ENST00000001;Parent=gene:ENSG00000001;biotype=protein_coding;tag=Ensembl_canonical
+chr1	ensembl	exon	1000	1200	.	+	.	ID=exon:ENSE00000001;Parent=transcript:ENST00000001;rank=1
+chr1	ensembl	exon	2000	2300	.	+	.	ID=exon:ENSE00000002;Parent=transcript:ENST00000001;rank=2
+chr1	ensembl	exon	4000	5000	.	+	.	ID=exon:ENSE00000003;Parent=transcript:ENST00000001;rank=3
+chr1	ensembl	CDS	1050	1200	.	+	0	ID=CDS:ENSP00000001;Parent=transcript:ENST00000001
+chr1	ensembl	CDS	2000	2300	.	+	0	ID=CDS:ENSP00000001;Parent=transcript:ENST00000001
+chr1	ensembl	CDS	4000	4500	.	+	1	ID=CDS:ENSP00000001;Parent=transcript:ENST00000001
+chr1	ensembl	gene	10000	12000	.	+	.	ID=gene:ENSG00000002;Name=TP53;biotype=lncRNA
+chr1	ensembl	lnc_RNA	10000	12000	.	+	.	ID=transcript:ENST00000002;Parent=gene:ENSG00000002;biotype=lncRNA
+chr1	ensembl	exon	10000	10500	.	+	.	ID=exon:ENSE00000010;Parent=transcript:ENST00000002;rank=1
+chr1	ensembl	exon	11500	12000	.	+	.	ID=exon:ENSE00000011;Parent=transcript:ENST00000002;rank=2

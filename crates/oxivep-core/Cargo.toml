@@ -1,0 +1,10 @@
+[package]
+name = "oxivep-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Core genomic types for OxiVEP"
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }

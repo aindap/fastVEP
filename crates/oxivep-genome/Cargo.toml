@@ -1,0 +1,10 @@
+[package]
+name = "oxivep-genome"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Transcript, exon, and gene models for OxiVEP"
+
+[dependencies]
+oxivep-core = { workspace = true }
+serde = { workspace = true }

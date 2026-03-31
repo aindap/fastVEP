@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OxiVEP - Variant Effect Predictor</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #242734;
+      --border: #2e3240;
+      --text: #e4e6ed;
+      --text-dim: #8b8fa3;
+      --accent: #6c7aee;
+      --accent-hover: #5a68d6;
+      --high: #f5426c;
+      --moderate: #f59e0b;
+      --low: #3b82f6;
+      --modifier: #6b7280;
+      --success: #10b981;
+      --radius: 10px;
+      --shadow: 0 4px 24px rgba(0,0,0,0.3);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    /* Header */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    header h1 span { color: var(--accent); }
+    header .badge {
+      background: var(--accent);
+      color: white;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    header .spacer { flex: 1; }
+    header a {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 13px;
+    }
+    header a:hover { color: var(--text); }
+
+    /* Layout */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px 32px;
+    }
+
+    /* Input Section */
+    .input-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .input-section h2 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .input-grid {
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      gap: 20px;
+    }
+    @media (max-width: 900px) {
+      .input-grid { grid-template-columns: 1fr; }
+    }
+    textarea {
+      width: 100%;
+      min-height: 200px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      padding: 14px;
+      resize: vertical;
+      transition: border-color 0.2s;
+    }
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    textarea::placeholder { color: var(--text-dim); }
+
+    .controls { display: flex; flex-direction: column; gap: 12px; }
+    .control-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    select, input[type="number"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 8px 12px;
+      font-size: 13px;
+    }
+    select:focus, input:focus { outline: none; border-color: var(--accent); }
+
+    .checkbox-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .checkbox-group label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text);
+      cursor: pointer;
+      padding: 4px 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      transition: all 0.2s;
+      text-transform: none;
+      font-weight: 400;
+      letter-spacing: 0;
+    }
+    .checkbox-group label:hover { border-color: var(--accent); }
+    .checkbox-group input:checked + span { color: var(--accent); }
+
+    .btn-row { display: flex; gap: 10px; margin-top: 8px; }
+    .btn {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+    .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background: var(--border); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Status bar */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      background: var(--surface2);
+      border-radius: 8px;
+      font-size: 13px;
+      margin-top: 12px;
+      display: none;
+    }
+    .status-bar.visible { display: flex; }
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Results Section */
+    .results-section {
+      display: none;
+    }
+    .results-section.visible { display: block; }
+
+    .results-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .results-header h2 { font-size: 18px; font-weight: 700; }
+    .stats {
+      display: flex;
+      gap: 24px;
+    }
+    .stat {
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 2px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius) var(--radius) 0 0;
+      padding: 4px 4px 0;
+    }
+    .tab {
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-dim);
+      background: transparent;
+      border: none;
+      border-radius: 8px 8px 0 0;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active {
+      color: var(--text);
+      background: var(--surface2);
+    }
+
+    /* Results table */
+    .results-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 var(--radius) var(--radius);
+      overflow: hidden;
+    }
+    .table-wrapper {
+      overflow-x: auto;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    th {
+      position: sticky;
+      top: 0;
+      background: var(--surface2);
+      color: var(--text-dim);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.5px;
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    th:hover { color: var(--text); }
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    tr:hover td { background: var(--surface2); }
+
+    /* Impact badges */
+    .impact {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .impact-HIGH { background: rgba(245,66,108,0.15); color: var(--high); }
+    .impact-MODERATE { background: rgba(245,158,11,0.15); color: var(--moderate); }
+    .impact-LOW { background: rgba(59,130,246,0.15); color: var(--low); }
+    .impact-MODIFIER { background: rgba(107,114,128,0.15); color: var(--modifier); }
+
+    /* Consequence tags */
+    .consequence-tag {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-family: monospace;
+      background: var(--surface2);
+      margin: 1px;
+    }
+
+    /* Summary chart */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      padding: 20px;
+    }
+    .summary-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .summary-card h3 {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+    }
+    .bar-chart .bar-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .bar-label {
+      font-size: 11px;
+      font-family: monospace;
+      width: 200px;
+      text-align: right;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bar-track {
+      flex: 1;
+      height: 16px;
+      background: var(--surface2);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.5s ease;
+    }
+    .bar-count {
+      font-size: 11px;
+      color: var(--text-dim);
+      width: 40px;
+    }
+
+    /* Raw output */
+    .raw-output {
+      padding: 16px;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 11px;
+      white-space: pre;
+      overflow-x: auto;
+      max-height: 500px;
+      overflow-y: auto;
+      background: var(--bg);
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+
+    /* Search/filter bar */
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .filter-bar input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+    .filter-bar input:focus { outline: none; border-color: var(--accent); }
+    .filter-bar select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 32px;
+      color: var(--text-dim);
+      font-size: 12px;
+    }
+
+    /* Animations */
+    .fade-in { animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><span>Oxi</span>VEP</h1>
+    <span class="badge">v0.1.0</span>
+    <span class="spacer"></span>
+    <a href="https://github.com/your-org/OxiVEP">GitHub</a>
+  </header>
+
+  <div class="container">
+    <!-- Input Section -->
+    <div class="input-section">
+      <h2>Input Variants</h2>
+      <div class="input-grid">
+        <div>
+          <textarea id="vcfInput" placeholder="Paste VCF data here, or use the example below...&#10;&#10;Example:&#10;#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO&#10;chr1	1100	rs003	A	G	30	PASS	.&#10;chr1	1201	rs004	G	A	30	PASS	."></textarea>
+        </div>
+        <div class="controls">
+          <div class="control-group">
+            <label>Output Format</label>
+            <select id="outputFormat">
+              <option value="table">Interactive Table</option>
+              <option value="vcf">VCF (CSQ field)</option>
+              <option value="tab">Tab-delimited</option>
+              <option value="json">JSON</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label>Upstream/Downstream Distance</label>
+            <input type="number" id="distance" value="5000" min="0" max="50000">
+          </div>
+          <div class="control-group">
+            <label>Options</label>
+            <div class="checkbox-group">
+              <label><input type="checkbox" id="optHgvs" checked><span>HGVS</span></label>
+              <label><input type="checkbox" id="optSymbol" checked><span>Symbol</span></label>
+              <label><input type="checkbox" id="optCanonical"><span>Canonical</span></label>
+              <label><input type="checkbox" id="optPick"><span>Pick</span></label>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="btnAnnotate" onclick="annotate()">Annotate</button>
+            <button class="btn btn-secondary" onclick="loadExample()">Load Example</button>
+            <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
+          </div>
+        </div>
+      </div>
+      <div class="status-bar" id="statusBar">
+        <div class="spinner"></div>
+        <span id="statusText">Annotating variants...</span>
+      </div>
+    </div>
+
+    <!-- Results Section -->
+    <div class="results-section" id="resultsSection">
+      <div class="results-header">
+        <h2>Results</h2>
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-value" id="statVariants">0</div>
+            <div class="stat-label">Variants</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="statAnnotations">0</div>
+            <div class="stat-label">Annotations</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="statTime">0ms</div>
+            <div class="stat-label">Time</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('table')">Table</button>
+        <button class="tab" onclick="switchTab('summary')">Summary</button>
+        <button class="tab" onclick="switchTab('raw')">Raw Output</button>
+      </div>
+
+      <div class="results-panel">
+        <!-- Filter Bar -->
+        <div class="filter-bar" id="filterBar">
+          <input type="text" id="searchInput" placeholder="Search gene, transcript, consequence..." oninput="filterResults()">
+          <select id="impactFilter" onchange="filterResults()">
+            <option value="">All Impacts</option>
+            <option value="HIGH">HIGH</option>
+            <option value="MODERATE">MODERATE</option>
+            <option value="LOW">LOW</option>
+            <option value="MODIFIER">MODIFIER</option>
+          </select>
+        </div>
+
+        <!-- Table View -->
+        <div id="tabTable" class="table-wrapper">
+          <table id="resultsTable">
+            <thead>
+              <tr>
+                <th onclick="sortTable(0)">Location</th>
+                <th onclick="sortTable(1)">Allele</th>
+                <th onclick="sortTable(2)">Consequence</th>
+                <th onclick="sortTable(3)">Impact</th>
+                <th onclick="sortTable(4)">Symbol</th>
+                <th onclick="sortTable(5)">Gene</th>
+                <th onclick="sortTable(6)">Transcript</th>
+                <th onclick="sortTable(7)">Biotype</th>
+                <th onclick="sortTable(8)">Exon</th>
+                <th onclick="sortTable(9)">HGVSc</th>
+                <th onclick="sortTable(10)">HGVSp</th>
+                <th onclick="sortTable(11)">cDNA</th>
+                <th onclick="sortTable(12)">CDS</th>
+                <th onclick="sortTable(13)">Protein</th>
+                <th onclick="sortTable(14)">AA</th>
+                <th onclick="sortTable(15)">Codons</th>
+              </tr>
+            </thead>
+            <tbody id="resultsBody"></tbody>
+          </table>
+        </div>
+
+        <!-- Summary View -->
+        <div id="tabSummary" style="display:none">
+          <div class="summary-grid" id="summaryGrid"></div>
+        </div>
+
+        <!-- Raw View -->
+        <div id="tabRaw" style="display:none">
+          <pre class="raw-output" id="rawOutput"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    OxiVEP &mdash; High-performance variant effect prediction in Rust
+  </footer>
+
+<script>
+// ============================================================
+// OxiVEP Client-Side Annotation Engine
+// ============================================================
+
+// Embedded example GFF3 gene model
+const EXAMPLE_GFF3 = `##gff-version 3
+chr1\tensembl\tgene\t1000\t5000\t.\t+\t.\tID=gene:ENSG00000001;Name=BRCA1;biotype=protein_coding
+chr1\tensembl\tmRNA\t1000\t5000\t.\t+\t.\tID=transcript:ENST00000001;Parent=gene:ENSG00000001;biotype=protein_coding;tag=Ensembl_canonical
+chr1\tensembl\texon\t1000\t1200\t.\t+\t.\tID=exon:ENSE00000001;Parent=transcript:ENST00000001;rank=1
+chr1\tensembl\texon\t2000\t2300\t.\t+\t.\tID=exon:ENSE00000002;Parent=transcript:ENST00000001;rank=2
+chr1\tensembl\texon\t4000\t5000\t.\t+\t.\tID=exon:ENSE00000003;Parent=transcript:ENST00000001;rank=3
+chr1\tensembl\tCDS\t1050\t1200\t.\t+\t0\tID=CDS:ENSP00000001;Parent=transcript:ENST00000001
+chr1\tensembl\tCDS\t2000\t2300\t.\t+\t0\tID=CDS:ENSP00000001;Parent=transcript:ENST00000001
+chr1\tensembl\tCDS\t4000\t4500\t.\t+\t1\tID=CDS:ENSP00000001;Parent=transcript:ENST00000001
+chr1\tensembl\tgene\t10000\t12000\t.\t+\t.\tID=gene:ENSG00000002;Name=TP53;biotype=lncRNA
+chr1\tensembl\tlnc_RNA\t10000\t12000\t.\t+\t.\tID=transcript:ENST00000002;Parent=gene:ENSG00000002;biotype=lncRNA
+chr1\tensembl\texon\t10000\t10500\t.\t+\t.\tID=exon:ENSE00000010;Parent=transcript:ENST00000002;rank=1
+chr1\tensembl\texon\t11500\t12000\t.\t+\t.\tID=exon:ENSE00000011;Parent=transcript:ENST00000002;rank=2`;
+
+const EXAMPLE_VCF = `##fileformat=VCFv4.2
+#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO
+chr1\t500\trs001\tA\tG\t30\tPASS\tDP=50
+chr1\t1020\trs002\tA\tG\t30\tPASS\tDP=50
+chr1\t1100\trs003\tA\tG\t30\tPASS\tDP=50
+chr1\t1201\trs004\tG\tA\t30\tPASS\tDP=50
+chr1\t1500\trs005\tC\tT\t30\tPASS\tDP=50
+chr1\t1999\trs006\tA\tG\t30\tPASS\tDP=50
+chr1\t2100\trs007\tA\tG\t30\tPASS\tDP=50
+chr1\t4600\trs008\tC\tT\t30\tPASS\tDP=50
+chr1\t6000\trs009\tT\tC\t30\tPASS\tDP=50
+chr1\t10100\trs010\tA\tG\t30\tPASS\tDP=50
+chr1\t100000\trs011\tA\tG\t30\tPASS\tDP=50
+chr1\t1100\trs012\tAC\tA\t30\tPASS\tDP=50`;
+
+// Parse GFF3 into transcript models
+function parseGFF3(text) {
+  const genes = {};
+  const transcripts = {};
+  const exons = [];
+  const cdsList = [];
+  for (const line of text.split('\n')) {
+    if (!line || line.startsWith('#')) continue;
+    const f = line.split('\t');
+    if (f.length < 9) continue;
+    const [seqid,,type,start,end,,strandCh,,attrStr] = f;
+    const strand = strandCh === '-' ? -1 : 1;
+    const attrs = {};
+    for (const part of attrStr.split(';')) {
+      const [k,v] = part.split('=');
+      if (k && v) attrs[k] = decodeURIComponent(v);
+    }
+    const strip = (s, prefix) => s && s.startsWith(prefix) ? s.slice(prefix.length) : s;
+    if (type === 'gene' || type === 'pseudogene') {
+      const id = strip(attrs.ID, 'gene:');
+      genes[id] = { id, symbol: attrs.Name, biotype: attrs.biotype||'unknown', chr: seqid, start: +start, end: +end, strand };
+    } else if (['mRNA','transcript','lnc_RNA','miRNA','snRNA','snoRNA','rRNA','ncRNA'].includes(type)) {
+      const id = strip(attrs.ID, 'transcript:');
+      const parent = strip(attrs.Parent, 'gene:');
+      const canonical = attrs.tag && attrs.tag.includes('Ensembl_canonical');
+      transcripts[id] = { id, parent, biotype: attrs.biotype||type, chr: seqid, start: +start, end: +end, strand, canonical };
+    } else if (type === 'exon') {
+      const parent = strip(attrs.Parent, 'transcript:');
+      exons.push({ parent, start: +start, end: +end, strand, rank: +(attrs.rank||0) });
+    } else if (type === 'CDS') {
+      const parent = strip(attrs.Parent, 'transcript:');
+      const pid = strip(attrs.ID, 'CDS:');
+      cdsList.push({ parent, proteinId: pid, start: +start, end: +end, phase: +f[7]||0 });
+    }
+  }
+  const result = [];
+  for (const [tid, tr] of Object.entries(transcripts)) {
+    const gene = genes[tr.parent] || { id: tr.parent, symbol: null, biotype: 'unknown', chr: tr.chr, start: tr.start, end: tr.end, strand: tr.strand };
+    const trExons = exons.filter(e => e.parent === tid).sort((a,b) => tr.strand === 1 ? a.start-b.start : b.start-a.start);
+    trExons.forEach((e,i) => { if (!e.rank) e.rank = i+1; });
+    const trCds = cdsList.filter(c => c.parent === tid);
+    const isCoding = trCds.length > 0;
+    let codingStart = null, codingEnd = null, cdnaCodingStart = null, cdnaCodingEnd = null;
+    if (isCoding) {
+      codingStart = Math.min(...trCds.map(c=>c.start));
+      codingEnd = Math.max(...trCds.map(c=>c.end));
+      let cdna = 0;
+      for (const ex of trExons) {
+        const len = ex.end - ex.start + 1;
+        if (tr.strand === 1) {
+          if (!cdnaCodingStart && codingStart >= ex.start && codingStart <= ex.end) cdnaCodingStart = cdna + (codingStart - ex.start) + 1;
+          if (!cdnaCodingEnd && codingEnd >= ex.start && codingEnd <= ex.end) cdnaCodingEnd = cdna + (codingEnd - ex.start) + 1;
+        } else {
+          if (!cdnaCodingStart && codingEnd >= ex.start && codingEnd <= ex.end) cdnaCodingStart = cdna + (ex.end - codingEnd) + 1;
+          if (!cdnaCodingEnd && codingStart >= ex.start && codingStart <= ex.end) cdnaCodingEnd = cdna + (ex.end - codingStart) + 1;
+        }
+        cdna += len;
+      }
+    }
+    result.push({
+      id: tid, gene, biotype: tr.biotype, chr: tr.chr, start: tr.start, end: tr.end, strand: tr.strand,
+      exons: trExons, isCoding, codingStart, codingEnd, cdnaCodingStart, cdnaCodingEnd,
+      canonical: tr.canonical||false,
+      proteinId: trCds.length ? trCds[0].proteinId : null
+    });
+  }
+  return result;
+}
+
+// Parse VCF line
+function parseVCF(text) {
+  const variants = [];
+  for (const line of text.split('\n')) {
+    if (!line || line.startsWith('#')) continue;
+    const f = line.split('\t');
+    if (f.length < 8) continue;
+    let [chrom, posStr, id, ref, alt, qual, filter, info] = f;
+    let pos = +posStr;
+    const alts = alt.split(',');
+    const isIndel = alts.some(a => a.length !== ref.length || a.startsWith('D') || a.startsWith('I'));
+    let refA = ref, altAs = [...alts], start = pos;
+    if (alt !== '.' && isIndel) {
+      if (alts.length > 1) {
+        const nonStar = [ref, ...alts.filter(a=>!a.includes('*'))];
+        if (nonStar.length > 1 && nonStar.every(s => s[0] === nonStar[0][0])) {
+          refA = ref.length > 1 ? ref.slice(1) : '-';
+          start++;
+          altAs = alts.map(a => a.includes('*') ? a : (a.length > 1 ? a.slice(1) : '-'));
+        }
+      } else if (ref[0] === alts[0][0]) {
+        refA = ref.length > 1 ? ref.slice(1) : '-';
+        altAs = [alts[0].length > 1 ? alts[0].slice(1) : '-'];
+        start++;
+      }
+    }
+    const end = refA === '-' ? start - 1 : start + refA.length - 1;
+    variants.push({ chrom, start, end, ref: refA, alts: altAs, id: id === '.' ? null : id, origLine: line, qual, filter, info, origRef: ref, origAlt: alt, origPos: pos });
+  }
+  return variants;
+}
+
+// Predict consequences
+function predict(variant, transcripts, distance) {
+  const results = [];
+  const {chrom, start, end, ref: refA, alts} = variant;
+  for (const tr of transcripts) {
+    if (tr.chr !== chrom) continue;
+    const overlaps = start <= tr.end + distance && end >= tr.start - distance;
+    if (!overlaps) continue;
+    for (const alt of alts) {
+      const r = predictAllele(start, end, refA, alt, tr, distance);
+      r.allele = alt;
+      r.transcript = tr;
+      results.push(r);
+    }
+  }
+  if (results.length === 0) {
+    for (const alt of alts) {
+      results.push({ allele: alt, transcript: null, consequences: ['intergenic_variant'], impact: 'MODIFIER', cdna: null, cds: null, protein: null, aa: null, codons: null, exon: null, intron: null, dist: null });
+    }
+  }
+  return results;
+}
+
+function predictAllele(start, end, ref, alt, tr, dist) {
+  const r = { consequences: [], impact: 'MODIFIER', cdna: null, cds: null, protein: null, aa: null, codons: null, exon: null, intron: null, dist: null };
+  if (start > tr.end || end < tr.start) {
+    if (start > tr.end) r.dist = start - tr.end;
+    else r.dist = tr.start - end;
+    if (r.dist <= dist) {
+      if ((tr.strand === 1 && end < tr.start) || (tr.strand === -1 && start > tr.end)) r.consequences.push('upstream_gene_variant');
+      else r.consequences.push('downstream_gene_variant');
+    } else {
+      r.consequences.push('intergenic_variant');
+    }
+    return r;
+  }
+  // Check splice sites
+  const exons = tr.exons;
+  for (let i = 0; i < exons.length - 1; i++) {
+    const iStart = exons[i].end + 1, iEnd = exons[i+1].start - 1;
+    if (iStart > iEnd) continue;
+    if (start >= iStart && start <= Math.min(iStart+1, iEnd)) { r.consequences.push('splice_donor_variant'); r.impact = 'HIGH'; }
+    if (start >= Math.max(iEnd-1, iStart) && start <= iEnd) { r.consequences.push('splice_acceptor_variant'); r.impact = 'HIGH'; }
+  }
+  // Exon/intron
+  let inExon = false, exonIdx = -1;
+  for (let i = 0; i < exons.length; i++) {
+    if (start >= exons[i].start && start <= exons[i].end) { inExon = true; exonIdx = i; r.exon = `${i+1}/${exons.length}`; break; }
+  }
+  if (!inExon) {
+    for (let i = 0; i < exons.length - 1; i++) {
+      if (start > exons[i].end && start < exons[i+1].start) { r.intron = `${i+1}/${exons.length-1}`; break; }
+    }
+  }
+  // cDNA mapping
+  let cdnaPos = 0;
+  for (const ex of exons) {
+    if (start >= ex.start && start <= ex.end) {
+      r.cdna = tr.strand === 1 ? cdnaPos + (start - ex.start) + 1 : cdnaPos + (ex.end - start) + 1;
+      break;
+    }
+    cdnaPos += ex.end - ex.start + 1;
+  }
+  if (tr.isCoding && inExon) {
+    const inCoding = start >= tr.codingStart && start <= tr.codingEnd;
+    const in5utr = tr.strand === 1 ? start < tr.codingStart : start > tr.codingEnd;
+    const in3utr = tr.strand === 1 ? start > tr.codingEnd : start < tr.codingStart;
+    if (in5utr) r.consequences.push('5_prime_UTR_variant');
+    else if (in3utr) r.consequences.push('3_prime_UTR_variant');
+    else if (inCoding) {
+      if (r.cdna && tr.cdnaCodingStart) {
+        r.cds = r.cdna - tr.cdnaCodingStart + 1;
+        r.protein = Math.floor((r.cds - 1) / 3) + 1;
+      }
+      const isIns = ref === '-' && alt !== '-';
+      const isDel = ref !== '-' && alt === '-';
+      if (isIns || isDel) {
+        const len = isIns ? alt.length : ref.length;
+        if (len % 3 !== 0) { r.consequences.push('frameshift_variant'); r.impact = 'HIGH'; }
+        else if (isIns) { r.consequences.push('inframe_insertion'); r.impact = 'MODERATE'; }
+        else { r.consequences.push('inframe_deletion'); r.impact = 'MODERATE'; }
+      } else if (ref.length !== alt.length) {
+        const d = Math.abs(ref.length - alt.length);
+        if (d % 3 !== 0) { r.consequences.push('frameshift_variant'); r.impact = 'HIGH'; }
+        else { r.consequences.push('protein_altering_variant'); r.impact = 'MODERATE'; }
+      } else {
+        r.consequences.push('missense_variant');
+        r.impact = 'MODERATE';
+      }
+    }
+  } else if (!tr.isCoding) {
+    if (inExon) { r.consequences.push('non_coding_transcript_exon_variant'); r.consequences.push('non_coding_transcript_variant'); }
+  }
+  if (!inExon && r.consequences.filter(c => !c.includes('splice')).length === 0) {
+    r.consequences.push('intron_variant');
+  }
+  if (r.consequences.length === 0) r.consequences.push(tr.isCoding ? 'coding_transcript_variant' : 'non_coding_transcript_variant');
+  // Impact
+  const impactMap = { splice_acceptor_variant:'HIGH', splice_donor_variant:'HIGH', stop_gained:'HIGH', frameshift_variant:'HIGH', stop_lost:'HIGH', start_lost:'HIGH', missense_variant:'MODERATE', inframe_insertion:'MODERATE', inframe_deletion:'MODERATE', protein_altering_variant:'MODERATE', splice_region_variant:'LOW', synonymous_variant:'LOW' };
+  for (const c of r.consequences) { if (impactMap[c] && impactRank(impactMap[c]) < impactRank(r.impact)) r.impact = impactMap[c]; }
+  return r;
+}
+
+function impactRank(imp) { return {HIGH:0,MODERATE:1,LOW:2,MODIFIER:3}[imp]||3; }
+
+// State
+let allResults = [];
+let currentTab = 'table';
+let transcripts = [];
+
+function annotate() {
+  const vcfText = document.getElementById('vcfInput').value.trim();
+  if (!vcfText) return;
+  const status = document.getElementById('statusBar');
+  status.classList.add('visible');
+  document.getElementById('statusText').textContent = 'Parsing gene models...';
+  setTimeout(() => {
+    const t0 = performance.now();
+    transcripts = parseGFF3(EXAMPLE_GFF3);
+    document.getElementById('statusText').textContent = `Loaded ${transcripts.length} transcripts. Annotating...`;
+    setTimeout(() => {
+      const variants = parseVCF(vcfText);
+      const distance = +document.getElementById('distance').value || 5000;
+      allResults = [];
+      for (const v of variants) {
+        const preds = predict(v, transcripts, distance);
+        for (const p of preds) {
+          allResults.push({ variant: v, ...p });
+        }
+      }
+      const t1 = performance.now();
+      status.classList.remove('visible');
+      showResults(variants.length, allResults.length, t1 - t0);
+    }, 10);
+  }, 10);
+}
+
+function showResults(nVariants, nAnnotations, timeMs) {
+  document.getElementById('resultsSection').classList.add('visible');
+  document.getElementById('statVariants').textContent = nVariants;
+  document.getElementById('statAnnotations').textContent = nAnnotations;
+  document.getElementById('statTime').textContent = timeMs < 1 ? '<1ms' : Math.round(timeMs) + 'ms';
+  renderTable();
+  renderSummary();
+  renderRaw();
+}
+
+function renderTable() {
+  const tbody = document.getElementById('resultsBody');
+  tbody.innerHTML = '';
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const impFilter = document.getElementById('impactFilter').value;
+  for (const r of allResults) {
+    if (impFilter && r.impact !== impFilter) continue;
+    const text = [r.variant.chrom, r.transcript?.gene?.symbol, r.transcript?.id, ...r.consequences].join(' ').toLowerCase();
+    if (search && !text.includes(search)) continue;
+    const loc = r.variant.start === r.variant.end ? `${r.variant.chrom}:${r.variant.start}` : `${r.variant.chrom}:${r.variant.start}-${r.variant.end}`;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${loc}</td>
+      <td><code>${r.allele}</code></td>
+      <td>${r.consequences.map(c=>`<span class="consequence-tag">${c}</span>`).join(' ')}</td>
+      <td><span class="impact impact-${r.impact}">${r.impact}</span></td>
+      <td>${r.transcript?.gene?.symbol||'-'}</td>
+      <td><code>${r.transcript?.gene?.id||'-'}</code></td>
+      <td><code>${r.transcript?.id||'-'}</code></td>
+      <td>${r.transcript?.biotype||'-'}</td>
+      <td>${r.exon||r.intron||'-'}</td>
+      <td>${r.hgvsc||'-'}</td>
+      <td>${r.hgvsp||'-'}</td>
+      <td>${r.cdna||'-'}</td>
+      <td>${r.cds||'-'}</td>
+      <td>${r.protein||'-'}</td>
+      <td>${r.aa||'-'}</td>
+      <td>${r.codons||'-'}</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+function renderSummary() {
+  const grid = document.getElementById('summaryGrid');
+  // Consequence distribution
+  const consCount = {};
+  const impCount = {HIGH:0,MODERATE:0,LOW:0,MODIFIER:0};
+  for (const r of allResults) {
+    for (const c of r.consequences) consCount[c] = (consCount[c]||0) + 1;
+    impCount[r.impact]++;
+  }
+  const sorted = Object.entries(consCount).sort((a,b)=>b[1]-a[1]);
+  const maxC = sorted.length ? sorted[0][1] : 1;
+  const colors = { HIGH: '#f5426c', MODERATE: '#f59e0b', LOW: '#3b82f6', MODIFIER: '#6b7280' };
+  const consToImpact = c => {
+    if (['splice_acceptor_variant','splice_donor_variant','stop_gained','frameshift_variant','stop_lost','start_lost','transcript_ablation'].includes(c)) return 'HIGH';
+    if (['missense_variant','inframe_insertion','inframe_deletion','protein_altering_variant'].includes(c)) return 'MODERATE';
+    if (['splice_region_variant','synonymous_variant','stop_retained_variant','start_retained_variant'].includes(c)) return 'LOW';
+    return 'MODIFIER';
+  };
+  grid.innerHTML = `
+    <div class="summary-card">
+      <h3>Impact Distribution</h3>
+      <div class="bar-chart">${Object.entries(impCount).filter(([,v])=>v>0).map(([k,v])=>`
+        <div class="bar-row">
+          <span class="bar-label"><span class="impact impact-${k}">${k}</span></span>
+          <div class="bar-track"><div class="bar-fill" style="width:${v/Math.max(...Object.values(impCount))*100}%;background:${colors[k]}"></div></div>
+          <span class="bar-count">${v}</span>
+        </div>`).join('')}
+      </div>
+    </div>
+    <div class="summary-card">
+      <h3>Consequence Types</h3>
+      <div class="bar-chart">${sorted.slice(0,12).map(([k,v])=>`
+        <div class="bar-row">
+          <span class="bar-label">${k}</span>
+          <div class="bar-track"><div class="bar-fill" style="width:${v/maxC*100}%;background:${colors[consToImpact(k)]}"></div></div>
+          <span class="bar-count">${v}</span>
+        </div>`).join('')}
+      </div>
+    </div>
+    <div class="summary-card">
+      <h3>Genes Affected</h3>
+      <div class="bar-chart">${[...new Set(allResults.filter(r=>r.transcript?.gene?.symbol).map(r=>r.transcript.gene.symbol))].map(g=>{
+        const cnt = allResults.filter(r=>r.transcript?.gene?.symbol===g).length;
+        return `<div class="bar-row"><span class="bar-label">${g}</span><div class="bar-track"><div class="bar-fill" style="width:${cnt/allResults.length*100}%;background:var(--accent)"></div></div><span class="bar-count">${cnt}</span></div>`;
+      }).join('')}
+      </div>
+    </div>`;
+}
+
+function renderRaw() {
+  const fmt = document.getElementById('outputFormat').value;
+  let text = '';
+  if (fmt === 'json') {
+    text = JSON.stringify(allResults.map(r => ({
+      location: `${r.variant.chrom}:${r.variant.start}`,
+      allele: r.allele,
+      consequences: r.consequences,
+      impact: r.impact,
+      gene: r.transcript?.gene?.symbol || null,
+      transcript: r.transcript?.id || null,
+    })), null, 2);
+  } else if (fmt === 'tab') {
+    text = '#Location\tAllele\tConsequence\tIMPACT\tSYMBOL\tGene\tFeature\tBIOTYPE\n';
+    for (const r of allResults) {
+      text += `${r.variant.chrom}:${r.variant.start}\t${r.allele}\t${r.consequences.join(',')}\t${r.impact}\t${r.transcript?.gene?.symbol||'-'}\t${r.transcript?.gene?.id||'-'}\t${r.transcript?.id||'-'}\t${r.transcript?.biotype||'-'}\n`;
+    }
+  } else {
+    for (const r of allResults) {
+      text += `${r.variant.chrom}\t${r.variant.origPos}\t${r.variant.id||'.'}\t${r.variant.origRef}\t${r.variant.origAlt}\t${r.variant.qual}\t${r.variant.filter}\t${r.variant.info};CSQ=${r.allele}|${r.consequences.join('&')}|${r.impact}|${r.transcript?.gene?.symbol||''}|${r.transcript?.gene?.id||''}|Transcript|${r.transcript?.id||''}|${r.transcript?.biotype||''}\n`;
+    }
+  }
+  document.getElementById('rawOutput').textContent = text;
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('tabTable').style.display = tab === 'table' ? '' : 'none';
+  document.getElementById('tabSummary').style.display = tab === 'summary' ? '' : 'none';
+  document.getElementById('tabRaw').style.display = tab === 'raw' ? '' : 'none';
+  document.getElementById('filterBar').style.display = tab === 'table' ? '' : 'none';
+}
+
+function filterResults() { renderTable(); }
+
+function loadExample() {
+  document.getElementById('vcfInput').value = EXAMPLE_VCF;
+}
+
+function clearAll() {
+  document.getElementById('vcfInput').value = '';
+  document.getElementById('resultsSection').classList.remove('visible');
+  allResults = [];
+}
+
+function sortTable(col) {
+  const tbody = document.getElementById('resultsBody');
+  const rows = Array.from(tbody.rows);
+  const dir = tbody.dataset.sortCol == col && tbody.dataset.sortDir === 'asc' ? 'desc' : 'asc';
+  tbody.dataset.sortCol = col;
+  tbody.dataset.sortDir = dir;
+  rows.sort((a,b) => {
+    const av = a.cells[col].textContent, bv = b.cells[col].textContent;
+    return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+  });
+  for (const row of rows) tbody.appendChild(row);
+}
+</script>
+</body>
+</html>

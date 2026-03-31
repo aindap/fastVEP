@@ -1,0 +1,14 @@
+[package]
+name = "oxivep-io"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "VCF parsing, output formatting for OxiVEP"
+
+[dependencies]
+oxivep-core = { workspace = true }
+oxivep-genome = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }

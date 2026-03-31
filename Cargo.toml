@@ -1,0 +1,41 @@
+[workspace]
+members = [
+    "crates/oxivep-core",
+    "crates/oxivep-genome",
+    "crates/oxivep-cache",
+    "crates/oxivep-consequence",
+    "crates/oxivep-hgvs",
+    "crates/oxivep-io",
+    "crates/oxivep-filter",
+    "crates/oxivep-cli",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "A high-performance variant effect predictor written in Rust"
+
+[workspace.dependencies]
+# Internal crates
+oxivep-core = { path = "crates/oxivep-core" }
+oxivep-genome = { path = "crates/oxivep-genome" }
+oxivep-cache = { path = "crates/oxivep-cache" }
+oxivep-consequence = { path = "crates/oxivep-consequence" }
+oxivep-hgvs = { path = "crates/oxivep-hgvs" }
+oxivep-io = { path = "crates/oxivep-io" }
+oxivep-filter = { path = "crates/oxivep-filter" }
+
+# External crates
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
+rayon = "1.10"
+crossbeam = "0.8"
+flate2 = "1"
+memmap2 = "0.9"
+log = "0.4"
+env_logger = "0.11"

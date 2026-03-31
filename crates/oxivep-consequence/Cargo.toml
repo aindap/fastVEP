@@ -1,0 +1,11 @@
+[package]
+name = "oxivep-consequence"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Consequence prediction engine for OxiVEP"
+
+[dependencies]
+oxivep-core = { workspace = true }
+oxivep-genome = { workspace = true }
+log = { workspace = true }
