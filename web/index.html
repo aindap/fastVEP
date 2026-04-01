@@ -446,7 +446,7 @@
       <h2>Input Variants</h2>
       <div class="input-grid">
         <div>
-          <textarea id="vcfInput" placeholder="Paste VCF data here, or use the example below...&#10;&#10;Example:&#10;#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO&#10;chr1	1100	rs003	A	G	30	PASS	.&#10;chr1	1201	rs004	G	A	30	PASS	."></textarea>
+          <textarea id="vcfInput" placeholder="Paste VCF data here, or select an example from the dropdown on the right.&#10;&#10;Supported format: VCF (tab-separated)&#10;#CHROM  POS  ID  REF  ALT  QUAL  FILTER  INFO&#10;chr1    1100 rs1 A    G    30    PASS    .&#10;chr1    1201 rs2 G    A    30    PASS    .&#10;&#10;Supports SNVs, insertions, deletions, multi-allelic, and MNVs."></textarea>
         </div>
         <div class="controls">
           <div class="control-group">
@@ -471,9 +471,19 @@
               <label><input type="checkbox" id="optPick"><span>Pick</span></label>
             </div>
           </div>
+          <div class="control-group">
+            <label>Load Example</label>
+            <select id="exampleSelect" onchange="loadExample(this.value)">
+              <option value="">-- Select an example --</option>
+              <option value="all_consequences">All consequence types (12 variants)</option>
+              <option value="clinical">Clinical variants - BRCA1 (6 variants)</option>
+              <option value="indels">Insertions &amp; deletions (8 variants)</option>
+              <option value="splice">Splice site variants (6 variants)</option>
+              <option value="noncoding">Non-coding &amp; intergenic (5 variants)</option>
+            </select>
+          </div>
           <div class="btn-row">
             <button class="btn btn-primary" id="btnAnnotate" onclick="annotate()">Annotate</button>
-            <button class="btn btn-secondary" onclick="loadExample()">Load Example</button>
             <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
           </div>
         </div>
@@ -587,20 +597,65 @@ chr1\tensembl\tlnc_RNA\t10000\t12000\t.\t+\t.\tID=transcript:ENST00000002;Parent
 chr1\tensembl\texon\t10000\t10500\t.\t+\t.\tID=exon:ENSE00000010;Parent=transcript:ENST00000002;rank=1
 chr1\tensembl\texon\t11500\t12000\t.\t+\t.\tID=exon:ENSE00000011;Parent=transcript:ENST00000002;rank=2`;
 
-const EXAMPLE_VCF = `##fileformat=VCFv4.2
+const EXAMPLES = {
+  all_consequences: `##fileformat=VCFv4.2
+## All major consequence types demonstrated on a 2-gene model
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO
-chr1\t500\trs001\tA\tG\t30\tPASS\tDP=50
-chr1\t1020\trs002\tA\tG\t30\tPASS\tDP=50
-chr1\t1100\trs003\tA\tG\t30\tPASS\tDP=50
-chr1\t1201\trs004\tG\tA\t30\tPASS\tDP=50
-chr1\t1500\trs005\tC\tT\t30\tPASS\tDP=50
-chr1\t1999\trs006\tA\tG\t30\tPASS\tDP=50
-chr1\t2100\trs007\tA\tG\t30\tPASS\tDP=50
-chr1\t4600\trs008\tC\tT\t30\tPASS\tDP=50
-chr1\t6000\trs009\tT\tC\t30\tPASS\tDP=50
-chr1\t10100\trs010\tA\tG\t30\tPASS\tDP=50
-chr1\t100000\trs011\tA\tG\t30\tPASS\tDP=50
-chr1\t1100\trs012\tAC\tA\t30\tPASS\tDP=50`;
+chr1\t500\trs001\tA\tG\t30\tPASS\t.\t## upstream_gene_variant (500bp before gene)
+chr1\t1020\trs002\tA\tG\t30\tPASS\t.\t## 5_prime_UTR_variant (before CDS start)
+chr1\t1100\trs003\tA\tG\t30\tPASS\t.\t## missense_variant (in CDS exon 1)
+chr1\t1201\trs004\tG\tA\t30\tPASS\t.\t## splice_donor_variant (1st intronic base)
+chr1\t1500\trs005\tC\tT\t30\tPASS\t.\t## intron_variant (mid-intron)
+chr1\t1999\trs006\tA\tG\t30\tPASS\t.\t## splice_acceptor_variant (last intronic base)
+chr1\t2100\trs007\tA\tG\t30\tPASS\t.\t## missense_variant (in CDS exon 2)
+chr1\t4600\trs008\tC\tT\t30\tPASS\t.\t## 3_prime_UTR_variant (after CDS end)
+chr1\t6000\trs009\tT\tC\t30\tPASS\t.\t## downstream + upstream (between 2 genes)
+chr1\t10100\trs010\tA\tG\t30\tPASS\t.\t## non_coding_transcript_exon_variant (lncRNA exon)
+chr1\t100000\trs011\tA\tG\t30\tPASS\t.\t## intergenic_variant (far from any gene)
+chr1\t1100\trs012\tAC\tA\t30\tPASS\t.\t## frameshift_variant (1bp deletion in CDS)`,
+
+  clinical: `##fileformat=VCFv4.2
+## Simulated clinical variants in BRCA1-like gene
+#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO
+chr1\t1050\trs_start\tA\tG\t50\tPASS\t.\t## start_lost (1st base of ATG start codon)
+chr1\t1100\trs_missense\tA\tG\t50\tPASS\t.\t## missense_variant (amino acid change)
+chr1\t1100\trs_fs\tAC\tA\t50\tPASS\t.\t## frameshift_variant (1bp del, not divisible by 3)
+chr1\t1100\trs_inframe\tACGT\tA\t50\tPASS\t.\t## inframe_deletion (3bp del, divisible by 3)
+chr1\t1201\trs_splice\tG\tA\t50\tPASS\t.\t## splice_donor_variant (GT dinucleotide)
+chr1\t1999\trs_splice2\tA\tG\t50\tPASS\t.\t## splice_acceptor_variant (AG dinucleotide)`,
+
+  indels: `##fileformat=VCFv4.2
+## Insertion and deletion variants
+#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO
+chr1\t1100\t.\tA\tATTT\t30\tPASS\t.\t## 3bp insertion in CDS (inframe_insertion)
+chr1\t1100\t.\tA\tATT\t30\tPASS\t.\t## 2bp insertion in CDS (frameshift)
+chr1\t1100\t.\tAC\tA\t30\tPASS\t.\t## 1bp deletion in CDS (frameshift)
+chr1\t1100\t.\tACGT\tA\t30\tPASS\t.\t## 3bp deletion in CDS (inframe_deletion)
+chr1\t1020\t.\tA\tACCC\t30\tPASS\t.\t## insertion in 5'UTR
+chr1\t4600\t.\tCA\tC\t30\tPASS\t.\t## deletion in 3'UTR
+chr1\t1100\t.\tA\tG,T\t30\tPASS\t.\t## multi-allelic SNV (2 alt alleles)
+chr1\t1100\t.\tACG\tA,ACGT\t30\tPASS\t.\t## multi-allelic with indel`,
+
+  splice: `##fileformat=VCFv4.2
+## Splice site variants at different positions relative to exon-intron boundaries
+## Gene model: Exon1 (1000-1200) | Intron1 (1201-1999) | Exon2 (2000-2300)
+#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO
+chr1\t1201\t.\tG\tA\t30\tPASS\t.\t## splice_donor (intron pos +1, HIGH impact)
+chr1\t1202\t.\tT\tC\t30\tPASS\t.\t## splice_donor (intron pos +2, HIGH impact)
+chr1\t1205\t.\tC\tA\t30\tPASS\t.\t## splice_region (intron pos +5)
+chr1\t1500\t.\tA\tG\t30\tPASS\t.\t## intron_variant (mid-intron, MODIFIER)
+chr1\t1998\t.\tC\tT\t30\tPASS\t.\t## splice_acceptor (intron pos -2, HIGH impact)
+chr1\t1999\t.\tA\tG\t30\tPASS\t.\t## splice_acceptor (intron pos -1, HIGH impact)`,
+
+  noncoding: `##fileformat=VCFv4.2
+## Non-coding and intergenic variants
+#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO
+chr1\t10100\t.\tA\tG\t30\tPASS\t.\t## non_coding_transcript_exon_variant (lncRNA exon)
+chr1\t11000\t.\tC\tT\t30\tPASS\t.\t## intron_variant in lncRNA
+chr1\t500\t.\tG\tA\t30\tPASS\t.\t## upstream_gene_variant
+chr1\t5500\t.\tT\tC\t30\tPASS\t.\t## downstream_gene_variant
+chr1\t100000\t.\tA\tG\t30\tPASS\t.\t## intergenic_variant`,
+};
 
 // Parse GFF3 into transcript models
 function parseGFF3(text) {
@@ -968,8 +1023,13 @@ function switchTab(tab) {
 
 function filterResults() { renderTable(); }
 
-function loadExample() {
-  document.getElementById('vcfInput').value = EXAMPLE_VCF;
+function loadExample(key) {
+  if (!key) return;
+  const vcf = EXAMPLES[key];
+  if (vcf) {
+    document.getElementById('vcfInput').value = vcf;
+    document.getElementById('resultsSection').classList.remove('visible');
+  }
 }
 
 function clearAll() {

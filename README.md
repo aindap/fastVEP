@@ -16,56 +16,139 @@ OxiVEP is inspired by and aims to be compatible with [Ensembl VEP](https://www.e
 
 ## Quick Start
 
-### Installation
+### 1. Install Rust (if you don't have it)
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/OxiVEP.git
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
+
+### 2. Build and install OxiVEP
+
+```bash
+git clone https://github.com/kuanlinhuang/OxiVEP.git
 cd OxiVEP
 
-# Build (requires Rust 1.70+)
-cargo build --release
+# Build and install to your PATH (~/.cargo/bin/oxivep)
+cargo install --path crates/oxivep-cli
 
-# The binary is at target/release/oxivep
+# Verify it works
+oxivep --version
 ```
 
-### Basic Usage
+> **Note:** `cargo install` places the binary in `~/.cargo/bin/`. If `oxivep` is not found after install, run `source "$HOME/.cargo/env"` or add this line to your `~/.zshrc` (or `~/.bashrc`):
+> ```bash
+> source "$HOME/.cargo/env"
+> ```
+
+### 3. Try it — annotate the included test data
+
+OxiVEP ships with a small test VCF and GFF3 so you can try it immediately:
 
 ```bash
-# Annotate a VCF file using a GFF3 gene model
+# Annotate 12 test variants covering SNVs, indels, splice sites, UTRs, and intergenic regions
+oxivep annotate -i tests/test.vcf --gff3 tests/test.gff3 --hgvs --output-format tab
+```
+
+Expected output:
+
+```
+rs001   chr1:500       G  ENSG00000001  ENST00000001  Transcript  upstream_gene_variant
+rs002   chr1:1020      G  ENSG00000001  ENST00000001  Transcript  5_prime_UTR_variant
+rs003   chr1:1100      G  ENSG00000001  ENST00000001  Transcript  missense_variant
+rs004   chr1:1201      A  ENSG00000001  ENST00000001  Transcript  splice_donor_variant,intron_variant
+rs005   chr1:1500      T  ENSG00000001  ENST00000001  Transcript  intron_variant
+rs006   chr1:1999      G  ENSG00000001  ENST00000001  Transcript  splice_acceptor_variant,intron_variant
+rs007   chr1:2100      G  ENSG00000001  ENST00000001  Transcript  missense_variant
+rs008   chr1:4600      T  ENSG00000001  ENST00000001  Transcript  3_prime_UTR_variant
+rs009   chr1:6000      C  ...           ...           Transcript  downstream_gene_variant
+rs010   chr1:10100     G  ENSG00000002  ENST00000002  Transcript  non_coding_transcript_exon_variant
+rs011   chr1:100000    G  -             -             Transcript  intergenic_variant
+rs012   chr1:1101      -  ENSG00000001  ENST00000001  Transcript  frameshift_variant
+```
+
+The 12 variants cover: upstream, 5'UTR, missense, splice donor (HIGH), intron, splice acceptor (HIGH), 3'UTR, downstream, non-coding exon, intergenic, and frameshift.
+
+### 4. Try VCF output (with CSQ annotations)
+
+```bash
+oxivep annotate -i tests/test.vcf --gff3 tests/test.gff3 --hgvs --output-format vcf
+```
+
+### 5. Try JSON output
+
+```bash
+oxivep annotate -i tests/test.vcf --gff3 tests/test.gff3 --hgvs --output-format json
+```
+
+### 6. Launch the web interface
+
+```bash
+oxivep web --port 8080
+```
+
+Open http://localhost:8080 in your browser. Click **"Load Example"** to load pre-built test variants, then click **"Annotate"** to see results instantly.
+
+## Using Your Own Data
+
+### Annotate a real VCF against Ensembl gene models
+
+```bash
+# Download Ensembl GFF3 (human GRCh38)
+wget https://ftp.ensembl.org/pub/release-112/gff3/homo_sapiens/Homo_sapiens.GRCh38.112.gff3.gz
+gunzip Homo_sapiens.GRCh38.112.gff3.gz
+
+# Annotate your VCF
 oxivep annotate \
-  -i variants.vcf \
+  -i your_variants.vcf \
   -o annotated.vcf \
-  --gff3 genes.gff3 \
+  --gff3 Homo_sapiens.GRCh38.112.gff3 \
   --hgvs
 
-# Output as tab-delimited
-oxivep annotate \
-  -i variants.vcf \
-  --gff3 genes.gff3 \
-  --output-format tab
-
-# Output as JSON
-oxivep annotate \
-  -i variants.vcf \
-  --gff3 genes.gff3 \
-  --output-format json
-
-# Launch the web interface
-oxivep web --gff3 genes.gff3 --port 8080
+# Or pipe from bcftools
+bcftools view sample.vcf.gz chr21 | oxivep annotate -i - --gff3 Homo_sapiens.GRCh38.112.gff3 --output-format tab
 ```
 
-### Reading from stdin
+### Mouse, zebrafish, or other organisms
 
 ```bash
-cat variants.vcf | oxivep annotate -i - --gff3 genes.gff3
+# Mouse
+wget https://ftp.ensembl.org/pub/release-112/gff3/mus_musculus/Mus_musculus.GRCm39.112.gff3.gz
+
+# Zebrafish
+wget https://ftp.ensembl.org/pub/release-112/gff3/danio_rerio/Danio_rerio.GRCz11.112.gff3.gz
 ```
+
+OxiVEP works with any organism — just provide the matching GFF3.
+
+## Test Data Reference
+
+The repository includes test files in `tests/`:
+
+**`tests/test.gff3`** — Two genes on chr1:
+- `BRCA1` (ENSG00000001): Protein-coding gene at chr1:1000-5000, 3 exons, CDS at 1050-4500
+- `TP53` (ENSG00000002): lncRNA gene at chr1:10000-12000, 2 exons
+
+**`tests/test.vcf`** — 12 variants designed to demonstrate every major consequence type:
+
+| Variant | Position | Type | Expected Consequence |
+|---------|----------|------|---------------------|
+| rs001 | chr1:500 | SNV | upstream_gene_variant |
+| rs002 | chr1:1020 | SNV (in 5'UTR) | 5_prime_UTR_variant |
+| rs003 | chr1:1100 | SNV (in CDS) | missense_variant |
+| rs004 | chr1:1201 | SNV (intron pos 1) | splice_donor_variant |
+| rs005 | chr1:1500 | SNV (mid-intron) | intron_variant |
+| rs006 | chr1:1999 | SNV (intron last base) | splice_acceptor_variant |
+| rs007 | chr1:2100 | SNV (in CDS exon 2) | missense_variant |
+| rs008 | chr1:4600 | SNV (in 3'UTR) | 3_prime_UTR_variant |
+| rs009 | chr1:6000 | SNV (between genes) | downstream + upstream |
+| rs010 | chr1:10100 | SNV (lncRNA exon) | non_coding_transcript_exon_variant |
+| rs011 | chr1:100000 | SNV (far from genes) | intergenic_variant |
+| rs012 | chr1:1100 | 1bp deletion (CDS) | frameshift_variant |
 
 ## Command Reference
 
 ### `oxivep annotate`
-
-Annotate variants with predicted functional consequences.
 
 | Flag | Description | Default |
 |------|-------------|---------|
@@ -82,8 +165,6 @@ Annotate variants with predicted functional consequences.
 | `--canonical` | Flag canonical transcripts | off |
 
 ### `oxivep web`
-
-Launch the interactive web interface.
 
 | Flag | Description | Default |
 |------|-------------|---------|
@@ -105,41 +186,13 @@ Annotations are added as a `CSQ` field in the INFO column:
 ##INFO=<ID=CSQ,Number=.,Type=String,Description="Consequence annotations from OxiVEP. Format: Allele|Consequence|IMPACT|SYMBOL|Gene|Feature_type|Feature|BIOTYPE|EXON|INTRON|HGVSc|HGVSp|cDNA_position|CDS_position|Protein_position|Amino_acids|Codons|Existing_variation|DISTANCE|STRAND">
 ```
 
-Example:
-```
-chr1  1100  rs003  A  G  30  PASS  CSQ=G|missense_variant|MODERATE|BRCA1|ENSG001|Transcript|ENST001|protein_coding|1/3||ENST001:c.51A>G||101|51|17|||||1
-```
-
 ### Tab Output
 
-One line per variant-transcript-allele combination:
-
-```
-#Uploaded_variation  Location  Allele  Gene  Feature  Feature_type  Consequence  cDNA_position  CDS_position  Protein_position  Amino_acids  Codons  Existing_variation
-rs003  chr1:1100  G  ENSG001  ENST001  Transcript  missense_variant  101  51  17
-```
+One line per variant-transcript-allele combination with 13 columns.
 
 ### JSON Output
 
-```json
-{
-  "id": "rs003",
-  "seq_region_name": "chr1",
-  "start": 1100,
-  "end": 1100,
-  "allele_string": "A/G",
-  "most_severe_consequence": "missense_variant",
-  "transcript_consequences": [
-    {
-      "gene_id": "ENSG001",
-      "transcript_id": "ENST001",
-      "consequence_terms": ["missense_variant"],
-      "impact": "MODERATE",
-      "variant_allele": "G"
-    }
-  ]
-}
-```
+Structured JSON with `transcript_consequences` array per variant.
 
 ## Consequence Types
 
@@ -152,35 +205,7 @@ OxiVEP predicts 41 consequence types organized by impact:
 | **LOW** | splice_region_variant, splice_donor_5th_base_variant, splice_donor_region_variant, splice_polypyrimidine_tract_variant, synonymous_variant, start_retained_variant, stop_retained_variant, incomplete_terminal_codon_variant |
 | **MODIFIER** | coding_sequence_variant, 5_prime_UTR_variant, 3_prime_UTR_variant, non_coding_transcript_exon_variant, intron_variant, upstream_gene_variant, downstream_gene_variant, intergenic_variant, and others |
 
-## Input Requirements
-
-### VCF Files
-
-Standard VCF 4.1+ format. OxiVEP handles:
-- SNVs, MNVs, insertions, deletions
-- Multi-allelic sites (comma-separated ALT)
-- Star alleles (`*`)
-- Chromosome prefixes (`chr1` or `1`)
-- Phased and unphased genotypes
-
-### GFF3 Files
-
-Standard GFF3 format from Ensembl, NCBI, or GENCODE. Required feature types:
-- `gene` — Gene boundaries and symbols
-- `mRNA` / `transcript` — Transcript models
-- `exon` — Exon coordinates
-- `CDS` — Coding sequence regions
-
-Download from Ensembl:
-```bash
-# Human GRCh38
-wget https://ftp.ensembl.org/pub/release-112/gff3/homo_sapiens/Homo_sapiens.GRCh38.112.gff3.gz
-gunzip Homo_sapiens.GRCh38.112.gff3.gz
-```
-
 ## Architecture
-
-OxiVEP is organized as a Cargo workspace with modular crates:
 
 ```
 crates/
@@ -191,43 +216,21 @@ crates/
   oxivep-hgvs/         # HGVS nomenclature generation (c., p., g.)
   oxivep-io/           # VCF parser, output formatters (CSQ, tab, JSON)
   oxivep-filter/       # Variant filtering
-  oxivep-cli/          # CLI binary and annotation pipeline
+  oxivep-cli/          # CLI binary, annotation pipeline, web server
 web/                   # Web GUI (HTML/CSS/JS)
+tests/                 # Test VCF and GFF3 files
 ```
 
 ## Running Tests
 
 ```bash
-# Run all tests
-cargo test --workspace
-
-# Run tests for a specific crate
-cargo test -p oxivep-consequence
-
-# Run with output
-cargo test --workspace -- --nocapture
+cargo test --workspace          # 101 tests
+cargo test -p oxivep-consequence  # Just consequence prediction tests
 ```
-
-## Comparison with Ensembl VEP
-
-| Feature | Ensembl VEP | OxiVEP |
-|---------|-------------|--------|
-| Language | Perl | Rust |
-| Annotation source | Cache (Storable), Database, GFF3 | GFF3, FASTA |
-| Input formats | VCF, HGVS, IDs, SPDI, Region | VCF |
-| Output formats | VCF, Tab, JSON, VEP native | VCF, Tab, JSON |
-| Parallelism | Fork-based | Thread-based (rayon) |
-| Consequence types | ~35 SO terms | 41 SO terms |
-| HGVS | Full (c., p., g.) | Full (c., p., g.) |
-| Splice detection | Donor, acceptor, region | Donor, acceptor, region, 5th base, polypyrimidine |
-| Web interface | REST API | Built-in GUI |
-| Dependencies | Perl 5.22+, DBI, many CPAN modules | None (static binary) |
 
 ## Performance Benchmarks
 
 Benchmarked on Apple M-series (ARM64), single-threaded, release build.
-
-### Throughput
 
 | Dataset | Variants | Time | Throughput |
 |---------|----------|------|------------|
@@ -237,43 +240,15 @@ Benchmarked on Apple M-series (ARM64), single-threaded, release build.
 | Mouse chr19 (10 genes) | 500 | 0.033s | **15,200 variants/sec** |
 | Zebrafish chr5 (8 genes) | 300 | 0.031s | **9,800 variants/sec** |
 
-### Comparison with Ensembl VEP
+### vs. Ensembl VEP
 
 | Metric | Ensembl VEP (Perl) | OxiVEP (Rust) |
 |--------|-------------------|---------------|
-| Startup time | 5-15s (loading modules) | <0.01s |
-| 1,000 SNVs (offline, cache) | ~3-10s | **0.04s** |
-| Memory (1K variants) | ~500MB | **~5MB** |
-| Dependencies | Perl 5.22+, DBI, 10+ CPAN modules | **None (static binary)** |
-
-### Annotation Accuracy
-
-Tested against Ensembl VEP test suite patterns (101 tests, 22 VEP compatibility tests):
-
-| Category | Tests | Status |
-|----------|-------|--------|
-| VCF parsing (SNV, indel, multi-allelic, MNV) | 22 | All pass |
-| Allele normalization (VEP-compatible) | 8 | All pass |
-| Consequence prediction (all SO terms) | 21 | All pass |
-| HGVS nomenclature (c., p., g.) | 14 | All pass |
-| Codon table (NCBI standard genetic code) | 6 | All pass |
-| GFF3 parsing (forward/reverse strand) | 6 | All pass |
-| Cache/FASTA reading | 12 | All pass |
-| Output formatting (CSQ, tab, JSON) | 12 | All pass |
-
-Consequence distribution from 1,000 realistic human chr21 variants:
-```
-859 intergenic_variant
- 82 intron_variant
- 66 missense_variant
- 15 3_prime_UTR_variant
- 14 splice_donor_variant
- 14 5_prime_UTR_variant
- 10 splice_acceptor_variant
-  7 upstream_gene_variant
-  4 non_coding_transcript_variant
-  2 downstream_gene_variant
-```
+| Startup time | 5-15s | <0.05s |
+| 1,000 SNVs (offline) | ~3-10s | **0.04s** |
+| Peak memory (100K variants) | ~500 MB | **2.8 MB** |
+| Binary size | ~200 MB installed | **2.4 MB** |
+| Dependencies | Perl 5.22+, DBI, 10+ CPAN modules | **None** |
 
 ## License
 
