@@ -8,16 +8,21 @@ use oxivep_core::Consequence;
 /// EXON|INTRON|HGVSc|HGVSp|cDNA_position|CDS_position|Protein_position|
 /// Amino_acids|Codons|Existing_variation|DISTANCE|STRAND|FLAGS
 pub fn format_csq(vf: &VariationFeature, fields: &[&str]) -> String {
-    let mut entries = Vec::new();
+    let mut result = String::with_capacity(1024);
 
+    let mut first = true;
     for tv in &vf.transcript_variations {
         for aa in &tv.allele_annotations {
+            if !first {
+                result.push(',');
+            }
+            first = false;
             let entry = format_csq_entry(vf, tv, aa, fields);
-            entries.push(entry);
+            result.push_str(&entry);
         }
     }
 
-    entries.join(",")
+    result
 }
 
 fn format_csq_entry(
@@ -26,9 +31,12 @@ fn format_csq_entry(
     aa: &AlleleAnnotation,
     fields: &[&str],
 ) -> String {
-    let mut parts = Vec::new();
+    let mut result = String::with_capacity(512);
 
-    for field in fields {
+    for (i, field) in fields.iter().enumerate() {
+        if i > 0 {
+            result.push('|');
+        }
         let value = match *field {
             "Allele" => aa.allele.to_string(),
             "Consequence" => aa
@@ -38,11 +46,11 @@ fn format_csq_entry(
                 .collect::<Vec<_>>()
                 .join("&"),
             "IMPACT" => format!("{:?}", aa.impact).to_uppercase(),
-            "SYMBOL" => tv.gene_symbol.clone().unwrap_or_default(),
-            "Gene" => tv.gene_id.clone(),
+            "SYMBOL" => tv.gene_symbol.as_deref().unwrap_or_default().to_string(),
+            "Gene" => tv.gene_id.to_string(),
             "Feature_type" => "Transcript".to_string(),
-            "Feature" => tv.transcript_id.clone(),
-            "BIOTYPE" => tv.biotype.clone(),
+            "Feature" => tv.transcript_id.to_string(),
+            "BIOTYPE" => tv.biotype.to_string(),
             "EXON" => aa
                 .exon
                 .map(|(n, t)| format!("{}/{}", n, t))
@@ -156,13 +164,26 @@ fn format_csq_entry(
             "SOURCE" => tv.source.clone().unwrap_or_default(),
             _ => String::new(),
         };
-        parts.push(escape_csq_value(&value));
+        escape_csq_into(&value, &mut result);
     }
 
-    parts.join("|")
+    result
+}
+
+/// Escape special characters in CSQ field values, appending to an existing buffer.
+fn escape_csq_into(value: &str, buf: &mut String) {
+    for c in value.chars() {
+        match c {
+            ',' | '|' => buf.push('&'),
+            ';' => buf.push_str("%3B"),
+            '=' => buf.push_str("%3D"),
+            _ => buf.push(c),
+        }
+    }
 }
 
 /// Escape special characters in CSQ field values.
+#[cfg(test)]
 fn escape_csq_value(value: &str) -> String {
     value
         .replace(',', "&")
@@ -345,20 +366,20 @@ pub fn format_json(vf: &VariationFeature) -> serde_json::Value {
                 let mut tc = serde_json::Map::new();
                 tc.insert(
                     "gene_id".into(),
-                    serde_json::Value::String(tv.gene_id.clone()),
+                    serde_json::Value::String(tv.gene_id.to_string()),
                 );
                 tc.insert(
                     "transcript_id".into(),
-                    serde_json::Value::String(tv.transcript_id.clone()),
+                    serde_json::Value::String(tv.transcript_id.to_string()),
                 );
                 tc.insert(
                     "biotype".into(),
-                    serde_json::Value::String(tv.biotype.clone()),
+                    serde_json::Value::String(tv.biotype.to_string()),
                 );
                 if let Some(ref sym) = tv.gene_symbol {
                     tc.insert(
                         "gene_symbol".into(),
-                        serde_json::Value::String(sym.clone()),
+                        serde_json::Value::String(sym.to_string()),
                     );
                 }
                 tc.insert(

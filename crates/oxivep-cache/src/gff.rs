@@ -3,6 +3,7 @@ use oxivep_core::Strand;
 use oxivep_genome::{Exon, Gene, Transcript, Translation};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read};
+use std::sync::Arc;
 
 /// Parse a GFF3 file into Transcript models.
 ///
@@ -271,23 +272,23 @@ pub fn parse_gff3<R: Read>(reader: R) -> Result<Vec<Transcript>> {
         let gene = genes.get(&gff_tr.parent_gene);
         let gene_model = gene
             .map(|g| Gene {
-                stable_id: g.id.clone(),
-                symbol: g.symbol.clone(),
+                stable_id: Arc::from(g.id.as_str()),
+                symbol: g.symbol.as_deref().map(Arc::from),
                 symbol_source: Some("GFF3".to_string()),
                 hgnc_id: None,
-                biotype: g.biotype.clone(),
-                chromosome: g.chromosome.clone(),
+                biotype: Arc::from(g.biotype.as_str()),
+                chromosome: Arc::from(g.chromosome.as_str()),
                 start: g.start,
                 end: g.end,
                 strand: g.strand,
             })
             .unwrap_or_else(|| Gene {
-                stable_id: gff_tr.parent_gene.clone(),
+                stable_id: Arc::from(gff_tr.parent_gene.as_str()),
                 symbol: None,
                 symbol_source: None,
                 hgnc_id: None,
-                biotype: "unknown".into(),
-                chromosome: gff_tr.chromosome.clone(),
+                biotype: Arc::from("unknown"),
+                chromosome: Arc::from(gff_tr.chromosome.as_str()),
                 start: gff_tr.start,
                 end: gff_tr.end,
                 strand: gff_tr.strand,
@@ -454,11 +455,11 @@ pub fn parse_gff3<R: Read>(reader: R) -> Result<Vec<Transcript>> {
         };
 
         result.push(Transcript {
-            stable_id: tid.clone(),
+            stable_id: Arc::from(tid.as_str()),
             version: gff_tr.version,
             gene: gene_model,
-            biotype: gff_tr.biotype.clone(),
-            chromosome: gff_tr.chromosome.clone(),
+            biotype: Arc::from(gff_tr.biotype.as_str()),
+            chromosome: Arc::from(gff_tr.chromosome.as_str()),
             start: gff_tr.start,
             end: gff_tr.end,
             strand: gff_tr.strand,
@@ -612,11 +613,11 @@ chr1\tensembl\tCDS\t4000\t4500\t.\t+\t1\tID=CDS:ENSP00000001;Parent=transcript:E
         assert_eq!(transcripts.len(), 1);
 
         let tr = &transcripts[0];
-        assert_eq!(tr.stable_id, "ENST00000001");
-        assert_eq!(tr.gene.stable_id, "ENSG00000001");
+        assert_eq!(&*tr.stable_id, "ENST00000001");
+        assert_eq!(&*tr.gene.stable_id, "ENSG00000001");
         assert_eq!(tr.gene.symbol.as_deref(), Some("TESTGENE"));
-        assert_eq!(tr.biotype, "protein_coding");
-        assert_eq!(tr.chromosome, "chr1");
+        assert_eq!(&*tr.biotype, "protein_coding");
+        assert_eq!(&*tr.chromosome, "chr1");
         assert_eq!(tr.start, 1000);
         assert_eq!(tr.end, 5000);
         assert_eq!(tr.strand, Strand::Forward);

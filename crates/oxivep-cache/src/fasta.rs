@@ -29,7 +29,10 @@ impl FastaReader {
                 current_name = Some(name);
                 current_seq.clear();
             } else if !line.is_empty() {
-                current_seq.extend_from_slice(line.as_bytes());
+                // Store uppercase at load time to avoid repeated to_ascii_uppercase() on fetch
+                for &b in line.as_bytes() {
+                    current_seq.push(b.to_ascii_uppercase());
+                }
             }
         }
         if let Some(name) = current_name {
@@ -44,9 +47,9 @@ impl FastaReader {
         self.sequences.keys().map(|s| s.as_str()).collect()
     }
 
-    /// Fetch a region of a sequence (1-based, inclusive coordinates).
-    /// Returns uppercase nucleotides.
-    pub fn fetch(&self, chrom: &str, start: u64, end: u64) -> Result<Vec<u8>> {
+    /// Fetch a region as a borrowed slice (1-based, inclusive coordinates).
+    /// Zero-allocation since data is already stored uppercase in memory.
+    pub fn fetch_slice(&self, chrom: &str, start: u64, end: u64) -> Result<&[u8]> {
         let seq = self
             .sequences
             .get(chrom)
@@ -64,10 +67,13 @@ impl FastaReader {
             );
         }
 
-        Ok(seq[start_idx..end_idx]
-            .iter()
-            .map(|b| b.to_ascii_uppercase())
-            .collect())
+        Ok(&seq[start_idx..end_idx])
+    }
+
+    /// Fetch a region of a sequence (1-based, inclusive coordinates).
+    /// Returns uppercase nucleotides as a new Vec. Prefer `fetch_slice` to avoid allocation.
+    pub fn fetch(&self, chrom: &str, start: u64, end: u64) -> Result<Vec<u8>> {
+        self.fetch_slice(chrom, start, end).map(|s| s.to_vec())
     }
 
     /// Get the length of a chromosome.

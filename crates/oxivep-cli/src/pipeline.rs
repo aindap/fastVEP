@@ -3,8 +3,8 @@ use oxivep_cache::fasta::FastaReader;
 use oxivep_cache::gff::parse_gff3;
 use oxivep_cache::info::CacheInfo;
 use oxivep_cache::providers::{
-    FastaSequenceProvider, MemoryTranscriptProvider, SequenceProvider, TabixVariationProvider,
-    TranscriptProvider, VariationProvider,
+    FastaSequenceProvider, IndexedTranscriptProvider, MatchedVariant, SequenceProvider,
+    TabixVariationProvider, TranscriptProvider, VariationProvider,
 };
 use oxivep_consequence::ConsequencePredictor;
 use oxivep_core::Consequence;
@@ -12,9 +12,13 @@ use oxivep_hgvs;
 use oxivep_io::output;
 use oxivep_io::variant::{AlleleAnnotation, TranscriptVariation, VariationFeature};
 use oxivep_io::vcf::VcfParser;
+use rayon::prelude::*;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::Path;
+
+const BATCH_SIZE: usize = 1024;
 
 pub struct AnnotateConfig {
     pub input: String,
@@ -70,7 +74,7 @@ pub fn run_annotate(config: AnnotateConfig) -> Result<()> {
         eprintln!("Built sequences for {} coding transcripts", built);
     }
 
-    let transcript_provider = MemoryTranscriptProvider::new(transcripts);
+    let transcript_provider = IndexedTranscriptProvider::new(transcripts);
 
     // Initialize variation provider from VEP cache if provided
     let var_provider: Option<TabixVariationProvider> = if let Some(ref dir) = config.cache_dir {
@@ -139,66 +143,83 @@ pub fn run_annotate(config: AnnotateConfig) -> Result<()> {
         _ => {}
     }
 
-    // Process variants
+    // Process variants in batches for parallel annotation
     let mut count = 0u64;
     let mut first_json = true;
 
-    while let Some(mut vf) = vcf_parser.next_variant()? {
-        // Look up known variants from variation cache
-        let matched_by_allele: std::collections::HashMap<String, Vec<oxivep_cache::providers::MatchedVariant>> =
-            if let Some(ref vp) = var_provider {
-                let mut by_allele = std::collections::HashMap::new();
-                for alt in &vf.alt_alleles {
-                    let alt_str = alt.to_string();
-                    let ref_str = vf.ref_allele.to_string();
-                    let matches = vp.get_matched_variants(
-                        &vf.position.chromosome,
-                        vf.position.start,
-                        vf.position.end,
-                        &ref_str,
-                        &alt_str,
-                    ).unwrap_or_default();
-                    if !matches.is_empty() {
-                        by_allele.insert(alt_str, matches);
-                    }
-                }
-                by_allele
-            } else {
-                std::collections::HashMap::new()
-            };
+    loop {
+        // Phase 1: Read a batch of variants (sequential - VCF parser is not Sync)
+        let mut batch: Vec<(VariationFeature, HashMap<String, Vec<MatchedVariant>>)> = Vec::with_capacity(BATCH_SIZE);
+        for _ in 0..BATCH_SIZE {
+            match vcf_parser.next_variant()? {
+                Some(mut vf) => {
+                    // Variation lookup (sequential - TabixVariationProvider is not Sync)
+                    let matched_by_allele: HashMap<String, Vec<MatchedVariant>> =
+                        if let Some(ref vp) = var_provider {
+                            let mut by_allele = HashMap::new();
+                            for alt in &vf.alt_alleles {
+                                let alt_str = alt.to_string();
+                                let ref_str = vf.ref_allele.to_string();
+                                let matches = vp.get_matched_variants(
+                                    &vf.position.chromosome,
+                                    vf.position.start,
+                                    vf.position.end,
+                                    &ref_str,
+                                    &alt_str,
+                                ).unwrap_or_default();
+                                if !matches.is_empty() {
+                                    by_allele.insert(alt_str, matches);
+                                }
+                            }
+                            by_allele
+                        } else {
+                            HashMap::new()
+                        };
 
-        // Populate existing_variants on the VF for output access
-        for matches in matched_by_allele.values() {
-            for m in matches {
-                if !vf.existing_variants.iter().any(|kv| kv.name == m.name) {
-                    vf.existing_variants.push(oxivep_io::variant::KnownVariant {
-                        name: m.name.clone(),
-                        allele_string: None,
-                        minor_allele: m.minor_allele.clone(),
-                        minor_allele_freq: m.minor_allele_freq,
-                        clinical_significance: m.clin_sig.clone(),
-                        somatic: m.somatic,
-                        phenotype_or_disease: m.phenotype_or_disease,
-                        pubmed: m.pubmed.clone(),
-                        frequencies: m.frequencies.clone(),
-                    });
+                    // Populate existing_variants on the VF for output access
+                    for matches in matched_by_allele.values() {
+                        for m in matches {
+                            if !vf.existing_variants.iter().any(|kv| kv.name == m.name) {
+                                vf.existing_variants.push(oxivep_io::variant::KnownVariant {
+                                    name: m.name.clone(),
+                                    allele_string: None,
+                                    minor_allele: m.minor_allele.clone(),
+                                    minor_allele_freq: m.minor_allele_freq,
+                                    clinical_significance: m.clin_sig.clone(),
+                                    somatic: m.somatic,
+                                    phenotype_or_disease: m.phenotype_or_disease,
+                                    pubmed: m.pubmed.clone(),
+                                    frequencies: m.frequencies.clone(),
+                                });
+                            }
+                        }
+                    }
+
+                    batch.push((vf, matched_by_allele));
                 }
+                None => break,
             }
         }
 
-        // Find overlapping transcripts
-        let chrom = &vf.position.chromosome;
-        let query_start = if vf.position.start > config.distance {
-            vf.position.start - config.distance
-        } else {
-            1
-        };
-        let query_end = vf.position.end + config.distance;
-        let overlapping = transcript_provider.get_transcripts(chrom, query_start, query_end)?;
+        if batch.is_empty() {
+            break;
+        }
+
+        // Phase 2: Annotate batch in parallel (transcript lookup + consequence prediction + HGVS)
+        batch.par_iter_mut().for_each(|(vf, matched_by_allele)| {
+            let chrom = &vf.position.chromosome;
+            let query_start = if vf.position.start > config.distance {
+                vf.position.start - config.distance
+            } else {
+                1
+            };
+            let query_end = vf.position.end + config.distance;
+            let overlapping = transcript_provider.get_transcripts(chrom, query_start, query_end)
+                .unwrap_or_default();
 
         if overlapping.is_empty() {
             // Intergenic
-            annotate_intergenic(&mut vf);
+            annotate_intergenic(vf);
             // Populate existing_variation on intergenic annotations too
             for tv in &mut vf.transcript_variations {
                 for aa in &mut tv.allele_annotations {
@@ -267,7 +288,7 @@ pub fn run_annotate(config: AnnotateConfig) -> Result<()> {
                                 // Build versioned IDs for HGVS notation
                                 let versioned_tid = match tr.version {
                                     Some(v) => format!("{}.{}", tc.transcript_id, v),
-                                    None => tc.transcript_id.clone(),
+                                    None => tc.transcript_id.to_string(),
                                 };
 
                                 // Determine alleles for HGVS - complement for minus strand
@@ -352,9 +373,17 @@ pub fn run_annotate(config: AnnotateConfig) -> Result<()> {
                                         };
 
                                         // For insertions, use position before insertion
-                                        // for the primary HGVS coordinate (ins is BETWEEN two bases)
-                                        let hgvs_pos = if matches!((&hgvs_ref, &shifted_hgvs_alt), (Allele::Deletion, Allele::Sequence(_))) {
-                                            shifted_end // base before insertion
+                                        // for the primary HGVS coordinate (ins is BETWEEN two bases).
+                                        // On reverse strand, the insertion is between P and P+1 in
+                                        // genomic coords, but P+1 is 5' in transcript order, so we
+                                        // use P+1 as the HGVS start coordinate.
+                                        let is_insertion = matches!((&hgvs_ref, &shifted_hgvs_alt), (Allele::Deletion, Allele::Sequence(_)));
+                                        let hgvs_pos = if is_insertion {
+                                            if tr.strand == oxivep_core::Strand::Reverse {
+                                                shifted_end + 1
+                                            } else {
+                                                shifted_end // base before insertion
+                                            }
                                         } else {
                                             shifted_start
                                         };
@@ -393,19 +422,19 @@ pub fn run_annotate(config: AnnotateConfig) -> Result<()> {
                                                             // Check dup_before: base(s) before insertion match
                                                             let check_end = vf.position.end;
                                                             let check_start = check_end.saturating_sub(ins_len - 1);
-                                                            let dup_before = if let Ok(ref_seq) = sp.fetch_sequence(chrom, check_start, check_end) {
+                                                            let dup_before = if let Ok(ref_seq) = sp.fetch_sequence_slice(chrom, check_start, check_end) {
                                                                 ref_seq.len() == orig_ins.len()
                                                                     && ref_seq.iter().zip(orig_ins.iter())
-                                                                        .all(|(a, b)| a.to_ascii_uppercase() == b.to_ascii_uppercase())
+                                                                        .all(|(a, b)| a.eq_ignore_ascii_case(b))
                                                             } else { false };
                                                             // Check dup_after: base(s) after insertion match
                                                             let dup_after = if !dup_before {
                                                                 let cs = vf.position.start;
                                                                 let ce = cs + ins_len - 1;
-                                                                if let Ok(ref_seq) = sp.fetch_sequence(chrom, cs, ce) {
+                                                                if let Ok(ref_seq) = sp.fetch_sequence_slice(chrom, cs, ce) {
                                                                     ref_seq.len() == orig_ins.len()
                                                                         && ref_seq.iter().zip(orig_ins.iter())
-                                                                            .all(|(a, b)| a.to_ascii_uppercase() == b.to_ascii_uppercase())
+                                                                            .all(|(a, b)| a.eq_ignore_ascii_case(b))
                                                                 } else { false }
                                                             } else { false };
                                                             if dup_before || dup_after {
@@ -429,9 +458,8 @@ pub fn run_annotate(config: AnnotateConfig) -> Result<()> {
                                                                 } else {
                                                                     dup_base_pos
                                                                 };
-                                                                // For multi-base dups, the end of the dup region
-                                                                let shifted_dup_end = shifted_dup + ins_len - 1;
-                                                                if let Some((dup_cdna, dup_offset)) = tr.genomic_to_intronic_cdna(shifted_dup_end) {
+                                                                // Use shifted_dup (start of dup region) for offset computation
+                                                                if let Some((dup_cdna, dup_offset)) = tr.genomic_to_intronic_cdna(shifted_dup) {
                                                                     hgvsc = convert_ins_to_dup(h, dup_offset, ins_len, dup_cdna, coding_start, tr.cdna_coding_end);
                                                                 }
                                                             }
@@ -531,18 +559,18 @@ pub fn run_annotate(config: AnnotateConfig) -> Result<()> {
                                                             let ins_len = orig_ins.len() as u64;
                                                             let check_end = vf.position.end;
                                                             let check_start = check_end.saturating_sub(ins_len - 1);
-                                                            let dup_before = if let Ok(ref_seq) = sp.fetch_sequence(chrom, check_start, check_end) {
+                                                            let dup_before = if let Ok(ref_seq) = sp.fetch_sequence_slice(chrom, check_start, check_end) {
                                                                 ref_seq.len() == orig_ins.len()
                                                                     && ref_seq.iter().zip(orig_ins.iter())
-                                                                        .all(|(a, b)| a.to_ascii_uppercase() == b.to_ascii_uppercase())
+                                                                        .all(|(a, b)| a.eq_ignore_ascii_case(b))
                                                             } else { false };
                                                             let dup_after = if !dup_before {
                                                                 let cs = vf.position.start;
                                                                 let ce = cs + ins_len - 1;
-                                                                if let Ok(ref_seq) = sp.fetch_sequence(chrom, cs, ce) {
+                                                                if let Ok(ref_seq) = sp.fetch_sequence_slice(chrom, cs, ce) {
                                                                     ref_seq.len() == orig_ins.len()
                                                                         && ref_seq.iter().zip(orig_ins.iter())
-                                                                            .all(|(a, b)| a.to_ascii_uppercase() == b.to_ascii_uppercase())
+                                                                            .all(|(a, b)| a.eq_ignore_ascii_case(b))
                                                                 } else { false }
                                                             } else { false };
                                                             if dup_before || dup_after {
@@ -558,8 +586,7 @@ pub fn run_annotate(config: AnnotateConfig) -> Result<()> {
                                                                 } else {
                                                                     dup_base_pos
                                                                 };
-                                                                let shifted_dup_end = shifted_dup + ins_len - 1;
-                                                                if let Some((dup_cdna, dup_offset)) = tr.genomic_to_intronic_cdna(shifted_dup_end) {
+                                                                if let Some((dup_cdna, dup_offset)) = tr.genomic_to_intronic_cdna(shifted_dup) {
                                                                     hgvsc = convert_ins_to_dup_noncoding(h, dup_offset, ins_len, dup_cdna);
                                                                 }
                                                             }
@@ -674,28 +701,31 @@ pub fn run_annotate(config: AnnotateConfig) -> Result<()> {
 
             vf.compute_most_severe();
         }
+        }); // end par_iter_mut
 
-        // Write output
-        match config.output_format.as_str() {
-            "vcf" => write_vcf_line(&mut writer, &vf)?,
-            "tab" => {
-                for line in output::format_tab_line(&vf) {
-                    writeln!(writer, "{}", line)?;
+        // Phase 3: Write output sequentially (preserves VCF order)
+        for (vf, _) in &batch {
+            match config.output_format.as_str() {
+                "vcf" => write_vcf_line(&mut writer, vf)?,
+                "tab" => {
+                    for line in output::format_tab_line(vf) {
+                        writeln!(writer, "{}", line)?;
+                    }
                 }
-            }
-            "json" => {
-                if !first_json {
-                    writeln!(writer, ",")?;
+                "json" => {
+                    if !first_json {
+                        writeln!(writer, ",")?;
+                    }
+                    first_json = false;
+                    let json = output::format_json(vf);
+                    write!(writer, "{}", serde_json::to_string_pretty(&json)?)?;
                 }
-                first_json = false;
-                let json = output::format_json(&vf);
-                write!(writer, "{}", serde_json::to_string_pretty(&json)?)?;
+                _ => {}
             }
-            _ => {}
         }
 
-        count += 1;
-    }
+        count += batch.len() as u64;
+    } // end batch loop
 
     // Close JSON array
     if config.output_format == "json" {
@@ -741,12 +771,82 @@ fn convert_ins_to_dup(
         }
     };
 
-    let end_pos = build_pos(nearest_exon_cdna_pos, intron_offset);
     if ins_len == 1 {
-        Some(format!("{}{}dup", prefix, end_pos))
+        let pos = build_pos(nearest_exon_cdna_pos, intron_offset);
+        Some(format!("{}{}dup", prefix, pos))
     } else {
+        // The dup range is ins_len bases ending at intron_offset
         let start_offset = intron_offset - ins_len as i64 + 1;
         let start_pos = build_pos(nearest_exon_cdna_pos, start_offset);
+        let end_pos = build_pos(nearest_exon_cdna_pos, intron_offset);
+        Some(format!("{}{}_{}dup", prefix, start_pos, end_pos))
+    }
+}
+
+/// Convert intronic insertion to dup notation with explicit start/end offsets (coding).
+#[allow(dead_code)]
+fn convert_ins_to_dup_range(
+    hgvsc: &str,
+    start_offset: i64,
+    end_offset: i64,
+    nearest_exon_cdna_pos: u64,
+    coding_start: u64,
+    coding_end: Option<u64>,
+) -> Option<String> {
+    let prefix_end = hgvsc.find(":c.").map(|i| i + 3)
+        .or_else(|| hgvsc.find(":n.").map(|i| i + 3))?;
+    let prefix = &hgvsc[..prefix_end];
+
+    let build_pos = |cdna: u64, off: i64| -> String {
+        let raw = cdna as i64 - coding_start as i64 + 1;
+        let cp = if raw <= 0 { raw - 1 } else { raw };
+        if cp < 0 {
+            if off > 0 { format!("{}+{}", cp, off) } else { format!("{}{}", cp, off) }
+        } else if coding_end.is_some() && cdna > coding_end.unwrap() {
+            let u = cdna - coding_end.unwrap();
+            if off > 0 { format!("*{}+{}", u, off) } else { format!("*{}{}", u, off) }
+        } else if off > 0 {
+            format!("{}+{}", cp, off)
+        } else {
+            format!("{}{}", cp, off)
+        }
+    };
+
+    if start_offset == end_offset {
+        let pos = build_pos(nearest_exon_cdna_pos, start_offset);
+        Some(format!("{}{}dup", prefix, pos))
+    } else {
+        let start_pos = build_pos(nearest_exon_cdna_pos, start_offset);
+        let end_pos = build_pos(nearest_exon_cdna_pos, end_offset);
+        Some(format!("{}{}_{}dup", prefix, start_pos, end_pos))
+    }
+}
+
+/// Convert intronic insertion to dup notation with explicit start/end offsets (non-coding).
+fn convert_ins_to_dup_range_noncoding(
+    hgvsc: &str,
+    start_offset: i64,
+    end_offset: i64,
+    nearest_exon_cdna_pos: u64,
+) -> Option<String> {
+    let prefix_end = hgvsc.find(":n.").map(|i| i + 3)
+        .or_else(|| hgvsc.find(":c.").map(|i| i + 3))?;
+    let prefix = &hgvsc[..prefix_end];
+
+    let build_pos = |off: i64| -> String {
+        if off > 0 {
+            format!("{}+{}", nearest_exon_cdna_pos, off)
+        } else {
+            format!("{}{}", nearest_exon_cdna_pos, off)
+        }
+    };
+
+    if start_offset == end_offset {
+        let pos = build_pos(start_offset);
+        Some(format!("{}{}dup", prefix, pos))
+    } else {
+        let start_pos = build_pos(start_offset);
+        let end_pos = build_pos(end_offset);
         Some(format!("{}{}_{}dup", prefix, start_pos, end_pos))
     }
 }
@@ -770,12 +870,13 @@ fn convert_ins_to_dup_noncoding(
         }
     };
 
-    let end_pos = build_pos(intron_offset);
     if ins_len == 1 {
-        Some(format!("{}{}dup", prefix, end_pos))
+        let pos = build_pos(intron_offset);
+        Some(format!("{}{}dup", prefix, pos))
     } else {
         let start_offset = intron_offset - ins_len as i64 + 1;
         let start_pos = build_pos(start_offset);
+        let end_pos = build_pos(intron_offset);
         Some(format!("{}{}_{}dup", prefix, start_pos, end_pos))
     }
 }

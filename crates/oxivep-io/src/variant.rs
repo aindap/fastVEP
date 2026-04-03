@@ -1,4 +1,5 @@
 use oxivep_core::{Allele, Consequence, GenomicPosition, Impact, Strand};
+use std::sync::Arc;
 /// A variant feature ready for annotation.
 #[derive(Debug, Clone)]
 pub struct VariationFeature {
@@ -42,10 +43,10 @@ pub struct VcfFields {
 /// Annotation of a variant allele against a specific transcript.
 #[derive(Debug, Clone)]
 pub struct TranscriptVariation {
-    pub transcript_id: String,
-    pub gene_id: String,
-    pub gene_symbol: Option<String>,
-    pub biotype: String,
+    pub transcript_id: Arc<str>,
+    pub gene_id: Arc<str>,
+    pub gene_symbol: Option<Arc<str>>,
+    pub biotype: Arc<str>,
     pub allele_annotations: Vec<AlleleAnnotation>,
     pub canonical: bool,
     pub strand: Strand,

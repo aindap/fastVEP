@@ -355,4 +355,95 @@ mod tests {
         // Mid-intron: not splice region
         assert!(!is_splice_region(&tr, 1500));
     }
+
+    #[test]
+    fn test_polypyrimidine_forward() {
+        let tr = make_forward_transcript();
+        // Intron: 1201-1999. Acceptor at end (1999).
+        // Polypyrimidine tract: 3-17 bases from acceptor = positions 1982-1996
+        // (intron_end - 17 = 1982, intron_end - 3 = 1996)
+        // VEP definition: intron_end-16 to intron_end-2 (1983-1997)
+
+        // Check boundaries
+        for pos in 1980..=2000 {
+            let in_ppt = is_splice_polypyrimidine_tract(&tr, pos);
+            eprintln!("  pos {} (dist from end = {}): ppt={}", pos, 1999u64.saturating_sub(pos), in_ppt);
+        }
+
+        // Distance 17 from intron_end(1999) = 1982 = intron_end - 17
+        // Distance 3 from intron_end(1999) = 1996 = intron_end - 3
+        // But VEP measures from exon boundary (2000):
+        //   dist 17 from exon = 2000-17 = 1983 = intron_end - 16
+        //   dist 3 from exon = 2000-3 = 1997 = intron_end - 2
+        assert!(is_splice_polypyrimidine_tract(&tr, 1983), "pos 1983 (dist 17 from exon) should be PPT");
+        assert!(is_splice_polypyrimidine_tract(&tr, 1997), "pos 1997 (dist 3 from exon) should be PPT");
+        assert!(!is_splice_polypyrimidine_tract(&tr, 1982), "pos 1982 (dist 18 from exon) should NOT be PPT");
+        assert!(!is_splice_polypyrimidine_tract(&tr, 1998), "pos 1998 (dist 2 from exon) should NOT be PPT - it's the acceptor site");
+    }
+
+    fn make_reverse_transcript() -> Transcript {
+        // Reverse strand: exons sorted in descending genomic order
+        // Exon1 (rank 1, 5'): 2000-2300 (higher coords)
+        // Exon2 (rank 2, 3'): 1000-1200 (lower coords)
+        // Intron: 1201-1999
+        // For reverse: donor at intron_end (1999), acceptor at intron_start (1201)
+        Transcript {
+            stable_id: "ENST_REV".into(),
+            version: None,
+            gene: Gene {
+                stable_id: "ENSG_REV".into(),
+                symbol: None,
+                symbol_source: None,
+                hgnc_id: None,
+                biotype: "protein_coding".into(),
+                chromosome: "chr1".into(),
+                start: 1000,
+                end: 2300,
+                strand: Strand::Reverse,
+            },
+            biotype: "protein_coding".into(),
+            chromosome: "chr1".into(),
+            start: 1000,
+            end: 2300,
+            strand: Strand::Reverse,
+            exons: vec![
+                Exon { stable_id: "E1".into(), start: 2000, end: 2300, strand: Strand::Reverse, phase: 0, end_phase: 0, rank: 1 },
+                Exon { stable_id: "E2".into(), start: 1000, end: 1200, strand: Strand::Reverse, phase: 0, end_phase: 0, rank: 2 },
+            ],
+            translation: Some(Translation { stable_id: "P1".into(), genomic_start: 1000, genomic_end: 2300, start_exon_rank: 1, start_exon_offset: 0, end_exon_rank: 2, end_exon_offset: 200 }),
+            cdna_coding_start: Some(1),
+            cdna_coding_end: Some(502),
+            coding_region_start: Some(1000),
+            coding_region_end: Some(2300),
+            spliced_seq: None, translateable_seq: None, peptide: None,
+            canonical: false, mane_select: None, mane_plus_clinical: None,
+            tsl: None, appris: None, ccds: None, protein_id: None, protein_version: None,
+            swissprot: vec![], trembl: vec![], uniparc: vec![],
+            refseq_id: None, source: None, gencode_primary: false, flags: vec![], codon_table_start_phase: 0,
+        }
+    }
+
+    #[test]
+    fn test_polypyrimidine_reverse() {
+        let tr = make_reverse_transcript();
+        // Intron: 1201-1999. On reverse strand, acceptor at intron_start (1201).
+        // Polypyrimidine tract: 3-17 bases from acceptor
+        // VEP: distance measured from exon boundary (1200)
+        //   dist 3: 1200+3 = 1203 = intron_start + 2
+        //   dist 17: 1200+17 = 1217 = intron_start + 16
+
+        for pos in 1199..=1220 {
+            let in_ppt = is_splice_polypyrimidine_tract(&tr, pos);
+            eprintln!("  REV pos {} (dist from intron_start=1201: {}): ppt={}", pos, pos as i64 - 1201, in_ppt);
+        }
+
+        // c.X-17 = 17 bases from exon boundary = 1200+17 = 1217 = intron_start + 16
+        assert!(is_splice_polypyrimidine_tract(&tr, 1217), "pos 1217 (c.X-17, dist 16 from intron_start) should be PPT");
+        // c.X-3 = 3 bases from exon boundary = 1200+3 = 1203 = intron_start + 2
+        assert!(is_splice_polypyrimidine_tract(&tr, 1203), "pos 1203 (c.X-3, dist 2 from intron_start) should be PPT");
+        // c.X-18 = 18 bases = 1218 = intron_start + 17
+        assert!(!is_splice_polypyrimidine_tract(&tr, 1218), "pos 1218 (c.X-18) should NOT be PPT");
+        // c.X-2 = 2 bases = 1202 = intron_start + 1 (acceptor site)
+        assert!(!is_splice_polypyrimidine_tract(&tr, 1202), "pos 1202 (c.X-2, acceptor site) should NOT be PPT");
+    }
 }

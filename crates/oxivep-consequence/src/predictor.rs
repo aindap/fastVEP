@@ -1,16 +1,17 @@
 use oxivep_core::{Allele, Consequence, GenomicPosition, Impact, Strand};
 use oxivep_genome::codon::format_codon_change;
 use oxivep_genome::{CodonTable, Transcript};
+use std::sync::Arc;
 
 use crate::splice;
 
 /// Result of consequence prediction for a variant against a transcript.
 #[derive(Debug, Clone)]
 pub struct TranscriptConsequence {
-    pub transcript_id: String,
-    pub gene_id: String,
-    pub gene_symbol: Option<String>,
-    pub biotype: String,
+    pub transcript_id: Arc<str>,
+    pub gene_id: Arc<str>,
+    pub gene_symbol: Option<Arc<str>>,
+    pub biotype: Arc<str>,
     pub allele_consequences: Vec<AlleleConsequenceResult>,
     pub canonical: bool,
     pub strand: Strand,
@@ -296,7 +297,7 @@ impl ConsequencePredictor {
         }
 
         // Add NMD_transcript_variant modifier for nonsense_mediated_decay transcripts
-        if transcript.biotype == "nonsense_mediated_decay" {
+        if &*transcript.biotype == "nonsense_mediated_decay" {
             consequences.push(Consequence::NmdTranscriptVariant);
         }
 
@@ -326,9 +327,9 @@ impl ConsequencePredictor {
         alt_allele: &Allele,
         transcript: &Transcript,
         cds_start: Option<u64>,
-        _cds_end: Option<u64>,
+        cds_end: Option<u64>,
     ) -> Option<(Consequence, Option<(String, String)>, Option<(String, String)>)> {
-        let cds_pos = cds_start?;
+        let cds_pos_start = cds_start?;
 
         let ref_len = ref_allele.len();
         let alt_len = alt_allele.len();
@@ -359,6 +360,17 @@ impl ConsequencePredictor {
                 }
             };
 
+            // For deletions on reverse strand, cds_start maps to the end of the
+            // deletion in CDS space. Use the lower CDS position as the start.
+            let cds_pos = if is_deletion {
+                match cds_end {
+                    Some(ce) => cds_pos_start.min(ce),
+                    None => cds_pos_start,
+                }
+            } else {
+                cds_pos_start
+            };
+
             // Try to compute amino acids and codons from translateable_seq
             let (aa_pair, codon_pair) = self.compute_indel_amino_acids(
                 transcript, cds_pos, ref_allele, alt_allele, is_frameshift,
@@ -372,8 +384,8 @@ impl ConsequencePredictor {
             let seq_bytes = translateable_seq.as_bytes();
 
             // Get the codon containing this CDS position
-            let codon_number = ((cds_pos - 1) / 3) as usize;
-            let codon_offset = ((cds_pos - 1) % 3) as usize;
+            let codon_number = ((cds_pos_start - 1) / 3) as usize;
+            let codon_offset = ((cds_pos_start - 1) % 3) as usize;
             let codon_start = codon_number * 3;
 
             if codon_start + 3 <= seq_bytes.len() {
@@ -562,32 +574,118 @@ impl ConsequencePredictor {
             let codon_pair = Some((fs_ref_codon, fs_alt_codon));
             (aa_pair, codon_pair)
         } else {
-            // In-frame indel: show affected amino acids
-            let aa_pair = match (ref_allele, alt_allele) {
+            // In-frame indel: build alt sequence and translate affected codons
+            let mut alt_seq: Vec<u8> = seq_bytes.to_vec();
+            match (ref_allele, alt_allele) {
                 (Allele::Sequence(_), Allele::Deletion) => {
+                    // In-frame deletion: remove bases and compare ref/alt amino acids
                     let del_len = ref_allele.len();
-                    let end_cds = (cds_idx + del_len).min(seq_bytes.len());
-                    let deleted_region = &seq_bytes[codon_start..((end_cds + 2) / 3 * 3).min(seq_bytes.len())];
-                    let deleted_aas: String = deleted_region.chunks(3)
-                        .filter(|c| c.len() == 3)
-                        .map(|c| self.codon_table.translate(&[c[0], c[1], c[2]]) as char)
-                        .collect();
-                    Some((deleted_aas, "-".to_string()))
+                    let end = (cds_idx + del_len).min(alt_seq.len());
+                    alt_seq.drain(cds_idx..end);
+
+                    // Number of complete codons deleted
+                    let del_codons = del_len / 3;
+
+                    if codon_offset == 0 {
+                        // Deletion starts at codon boundary: VEP shows deleted AAs vs "-"
+                        let ref_end = (codon_start + del_codons * 3).min(seq_bytes.len());
+                        let ref_region = &seq_bytes[codon_start..ref_end];
+                        let ref_aas: String = ref_region.chunks(3)
+                            .filter(|c| c.len() == 3)
+                            .map(|c| self.codon_table.translate(&[c[0], c[1], c[2]]) as char)
+                            .collect();
+                        let ref_codons: String = ref_region.iter()
+                            .map(|&b| (b as char).to_uppercase().next().unwrap()).collect();
+                        let aa_pair = Some((ref_aas, "-".to_string()));
+                        let codon_pair = Some((ref_codons, "-".to_string()));
+                        return (aa_pair, codon_pair);
+                    } else {
+                        // Deletion within a codon: show affected codons ref and alt
+                        let n_ref_codons = del_codons + 1;
+                        let ref_end = (codon_start + n_ref_codons * 3).min(seq_bytes.len());
+                        let ref_region = &seq_bytes[codon_start..ref_end];
+                        let ref_aas: String = ref_region.chunks(3)
+                            .filter(|c| c.len() == 3)
+                            .map(|c| self.codon_table.translate(&[c[0], c[1], c[2]]) as char)
+                            .collect();
+                        let alt_codon_end = (codon_start + 3).min(alt_seq.len());
+                        let alt_region = &alt_seq[codon_start..alt_codon_end];
+                        let alt_aas: String = if alt_region.len() == 3 {
+                            String::from(self.codon_table.translate(&[alt_region[0], alt_region[1], alt_region[2]]) as char)
+                        } else {
+                            "-".to_string()
+                        };
+                        let ref_codons: String = ref_region.iter()
+                            .map(|&b| (b as char).to_uppercase().next().unwrap()).collect();
+                        let alt_codons: String = if alt_aas == "-" { "-".to_string() } else {
+                            alt_region.iter().map(|&b| (b as char).to_uppercase().next().unwrap()).collect()
+                        };
+                        let aa_pair = Some((ref_aas, alt_aas));
+                        let codon_pair = Some((ref_codons, alt_codons));
+                        return (aa_pair, codon_pair);
+                    }
                 }
                 (Allele::Deletion, Allele::Sequence(ins_bases)) => {
-                    let mut bases = ins_bases.clone();
+                    // In-frame insertion: reverse-complement for reverse strand
+                    let mut bases: Vec<u8> = ins_bases.clone();
                     if transcript.strand == Strand::Reverse {
-                        bases = bases.iter().map(|&b| complement(b)).collect();
+                        bases = bases.iter().rev().map(|&b| complement(b)).collect();
                     }
-                    let inserted_aas: String = bases.chunks(3)
+                    // For reverse strand, the VCF insertion point maps to one base
+                    // earlier in CDS space, so shift the insertion index by 1
+                    let ins_idx = if transcript.strand == Strand::Reverse {
+                        cds_idx + 1
+                    } else {
+                        cds_idx
+                    };
+                    for (i, &b) in bases.iter().enumerate() {
+                        if ins_idx + i <= alt_seq.len() {
+                            alt_seq.insert(ins_idx + i, b);
+                        }
+                    }
+
+                    // Ref: the single codon at the insertion point
+                    let ref_codon_str: String = ref_codon.iter()
+                        .map(|&b| (b as char).to_lowercase().next().unwrap()).collect();
+
+                    // Alt: translate codons spanning the insertion
+                    let ins_codons = (bases.len() / 3) + 1;
+                    let alt_end = (codon_start + ins_codons * 3).min(alt_seq.len());
+                    let alt_region = &alt_seq[codon_start..alt_end];
+                    let alt_aas: String = alt_region.chunks(3)
                         .filter(|c| c.len() == 3)
                         .map(|c| self.codon_table.translate(&[c[0], c[1], c[2]]) as char)
                         .collect();
-                    Some(("-".to_string(), inserted_aas))
+
+                    // Build alt codon string: original bases lowercase, inserted uppercase
+                    let ins_offset_in_codon = if transcript.strand == Strand::Reverse {
+                        codon_offset + 1
+                    } else {
+                        codon_offset
+                    };
+                    let mut alt_codon_display = String::new();
+                    for (i, &b) in alt_region.iter().enumerate() {
+                        let is_original = if i < ins_offset_in_codon {
+                            true
+                        } else if i >= ins_offset_in_codon + bases.len() {
+                            true
+                        } else {
+                            false
+                        };
+                        if is_original {
+                            alt_codon_display.push((b as char).to_lowercase().next().unwrap());
+                        } else {
+                            alt_codon_display.push((b as char).to_uppercase().next().unwrap());
+                        }
+                    }
+
+                    let aa_pair = Some((ref_aa_str, alt_aas));
+                    let codon_pair = Some((ref_codon_str, alt_codon_display));
+                    return (aa_pair, codon_pair);
                 }
-                _ => Some((ref_aa_str, "X".to_string())),
-            };
-            (aa_pair, None)
+                _ => {}
+            }
+            (Some((ref_aa_str, "X".to_string())), None)
         }
     }
 

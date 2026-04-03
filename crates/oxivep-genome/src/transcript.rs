@@ -1,16 +1,17 @@
 use crate::codon::{reverse_complement, CodonTable};
 use oxivep_core::Strand;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 /// A gene model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Gene {
-    pub stable_id: String,
-    pub symbol: Option<String>,
+    pub stable_id: Arc<str>,
+    pub symbol: Option<Arc<str>>,
     pub symbol_source: Option<String>,
     pub hgnc_id: Option<String>,
-    pub biotype: String,
-    pub chromosome: String,
+    pub biotype: Arc<str>,
+    pub chromosome: Arc<str>,
     pub start: u64,
     pub end: u64,
     pub strand: Strand,
@@ -19,12 +20,12 @@ pub struct Gene {
 /// A transcript model with all data needed for consequence prediction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transcript {
-    pub stable_id: String,
+    pub stable_id: Arc<str>,
     /// Version number from annotation (e.g., 7 for ENST00000348295.7)
     pub version: Option<u32>,
     pub gene: Gene,
-    pub biotype: String,
-    pub chromosome: String,
+    pub biotype: Arc<str>,
+    pub chromosome: Arc<str>,
     pub start: u64,
     pub end: u64,
     pub strand: Strand,
