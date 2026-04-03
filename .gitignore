@@ -1,6 +1,5 @@
 ensembl-vep/
 target/
-manuscript/
 .DS_Store
 
 # Benchmark outputs (inputs and scripts are tracked)

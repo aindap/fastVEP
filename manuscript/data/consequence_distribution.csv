@@ -1,0 +1,17 @@
+consequence,count
+intron_variant,11571
+non_coding_transcript_variant,10644
+upstream_gene_variant,3493
+downstream_gene_variant,1309
+non_coding_transcript_exon_variant,517
+NMD_transcript_variant,470
+splice_region_variant,86
+splice_polypyrimidine_tract_variant,37
+synonymous_variant,10
+missense_variant,6
+5_prime_UTR_variant,5
+intergenic_variant,5
+splice_acceptor_variant,4
+splice_donor_region_variant,2
+splice_donor_variant,1
+splice_donor_5th_base_variant,1
