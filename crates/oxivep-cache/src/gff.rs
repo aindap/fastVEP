@@ -244,16 +244,15 @@ pub fn parse_gff3<R: Read>(reader: R) -> Result<Vec<Transcript>> {
 
     // Create implicit exons for CDS features under implicit transcripts
     // that have no corresponding exon (bacterial genomes where CDS = exon)
-    for cds in &cds_features {
-        // Only create implicit exons for implicit transcripts (those ending in _t1)
-        if !cds.parent_transcript.ends_with("_t1") {
-            continue;
-        }
-        let has_exon = exons.iter().any(|e| {
-            e.parent_transcript == cds.parent_transcript
-        });
-        if !has_exon {
-            exons.push(GffExon {
+    {
+        let exon_parents: std::collections::HashSet<&str> = exons
+            .iter()
+            .map(|e| e.parent_transcript.as_str())
+            .collect();
+        let implicit_exons: Vec<GffExon> = cds_features
+            .iter()
+            .filter(|cds| cds.parent_transcript.ends_with("_t1") && !exon_parents.contains(cds.parent_transcript.as_str()))
+            .map(|cds| GffExon {
                 id: format!("exon_{}_{}_{}", cds.parent_transcript, cds.start, cds.end),
                 parent_transcript: cds.parent_transcript.clone(),
                 start: cds.start,
@@ -261,12 +260,26 @@ pub fn parse_gff3<R: Read>(reader: R) -> Result<Vec<Transcript>> {
                 strand: cds.strand,
                 phase: cds.phase,
                 rank: 0,
-            });
-        }
+            })
+            .collect();
+        exons.extend(implicit_exons);
+    }
+
+    // Pre-index exons and CDS by parent transcript for O(1) lookup per transcript.
+    // This replaces the O(T*E) nested scan in the assembly loop.
+    let mut exons_by_tx: HashMap<String, Vec<GffExon>> = HashMap::new();
+    for exon in exons {
+        exons_by_tx.entry(exon.parent_transcript.clone()).or_default().push(exon);
+    }
+    let mut cds_by_tx: HashMap<String, Vec<GffCds>> = HashMap::new();
+    for cds in cds_features {
+        cds_by_tx.entry(cds.parent_transcript.clone()).or_default().push(cds);
     }
 
     // Build transcripts
-    let mut result = Vec::new();
+    let mut result = Vec::with_capacity(transcripts.len());
+    let empty_exons: Vec<GffExon> = Vec::new();
+    let empty_cds: Vec<GffCds> = Vec::new();
 
     for (tid, gff_tr) in &transcripts {
         let gene = genes.get(&gff_tr.parent_gene);
@@ -294,10 +307,11 @@ pub fn parse_gff3<R: Read>(reader: R) -> Result<Vec<Transcript>> {
                 strand: gff_tr.strand,
             });
 
-        // Collect exons for this transcript
-        let mut tr_exons: Vec<Exon> = exons
+        // Collect exons for this transcript (O(1) lookup via pre-indexed map)
+        let mut tr_exons: Vec<Exon> = exons_by_tx
+            .get(tid.as_str())
+            .unwrap_or(&empty_exons)
             .iter()
-            .filter(|e| e.parent_transcript == *tid)
             .map(|e| Exon {
                 stable_id: e.id.clone(),
                 start: e.start,
@@ -322,11 +336,9 @@ pub fn parse_gff3<R: Read>(reader: R) -> Result<Vec<Transcript>> {
             }
         }
 
-        // Collect CDS features for this transcript
-        let tr_cds: Vec<&GffCds> = cds_features
-            .iter()
-            .filter(|c| c.parent_transcript == *tid)
-            .collect();
+        // Collect CDS features for this transcript (O(1) lookup via pre-indexed map)
+        let tr_cds_owned = cds_by_tx.get(tid.as_str()).unwrap_or(&empty_cds);
+        let tr_cds: Vec<&GffCds> = tr_cds_owned.iter().collect();
 
         // Find the phase of the first CDS in transcript order and convert to Ensembl phase.
         // GFF3 phase → Ensembl phase: 0→0, 1→2, 2→1
@@ -411,20 +423,8 @@ pub fn parse_gff3<R: Read>(reader: R) -> Result<Vec<Transcript>> {
             let mut cs = None;
             let mut ce = None;
 
-            let sorted_exons: Vec<&Exon> = match gff_tr.strand {
-                Strand::Forward => {
-                    let mut e: Vec<&Exon> = tr_exons.iter().collect();
-                    e.sort_by_key(|e| e.start);
-                    e
-                }
-                Strand::Reverse => {
-                    let mut e: Vec<&Exon> = tr_exons.iter().collect();
-                    e.sort_by(|a, b| b.start.cmp(&a.start));
-                    e
-                }
-            };
-
-            for exon in &sorted_exons {
+            // tr_exons already sorted by position at line 325-328 above
+            for exon in &tr_exons {
                 let exon_len = exon.end - exon.start + 1;
                 match gff_tr.strand {
                     Strand::Forward => {
@@ -467,16 +467,8 @@ pub fn parse_gff3<R: Read>(reader: R) -> Result<Vec<Transcript>> {
             translation,
             cdna_coding_start,
             cdna_coding_end,
-            coding_region_start: cds_features
-                .iter()
-                .filter(|c| c.parent_transcript == *tid)
-                .map(|c| c.start)
-                .min(),
-            coding_region_end: cds_features
-                .iter()
-                .filter(|c| c.parent_transcript == *tid)
-                .map(|c| c.end)
-                .max(),
+            coding_region_start: tr_cds.iter().map(|c| c.start).min(),
+            coding_region_end: tr_cds.iter().map(|c| c.end).max(),
             spliced_seq: None,
             translateable_seq: None,
             peptide: None,
@@ -486,13 +478,8 @@ pub fn parse_gff3<R: Read>(reader: R) -> Result<Vec<Transcript>> {
             tsl: None,
             appris: None,
             ccds: None,
-            protein_id: cds_features
-                .iter()
-                .find(|c| c.parent_transcript == *tid)
-                .map(|c| c.protein_id.clone()),
-            // VEP hardcodes protein version to 1 when loading from GFF3
-            // (see BaseGXF.pm line 731: -VERSION => 1)
-            protein_version: if cds_features.iter().any(|c| c.parent_transcript == *tid) {
+            protein_id: tr_cds.first().map(|c| c.protein_id.clone()),
+            protein_version: if !tr_cds.is_empty() {
                 Some(1)
             } else {
                 None
