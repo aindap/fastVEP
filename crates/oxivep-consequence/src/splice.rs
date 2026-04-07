@@ -104,7 +104,7 @@ pub fn is_splice_region(transcript: &Transcript, genomic_pos: u64) -> bool {
         }
 
         // Determine donor/acceptor ends based on strand
-        let (donor_end_genomic, acceptor_end_genomic) = match transcript.strand {
+        let (_donor_end_genomic, _acceptor_end_genomic) = match transcript.strand {
             Strand::Forward => (intron_start, intron_end), // donor at start, acceptor at end
             Strand::Reverse => (intron_end, intron_start), // donor at end, acceptor at start
         };

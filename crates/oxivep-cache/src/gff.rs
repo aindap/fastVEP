@@ -27,7 +27,7 @@ pub fn parse_gff3_indexed(
     use noodles_core::region::Interval;
     use noodles_csi::binning_index::BinningIndex;
     use noodles_tabix as tabix;
-    use std::io::Seek;
+
 
     let tbi_path = format!("{}.tbi", gff3_gz_path.display());
     let index = tabix::fs::read(&tbi_path)
@@ -296,7 +296,7 @@ fn parse_gff3_lines(lines: impl Iterator<Item = String>) -> Result<Vec<Transcrip
 
     // For NCBI GFF3 format: create implicit transcripts for genes that have
     // CDS children but no transcript/mRNA children (common in bacterial genomes).
-    let genes_with_transcripts: std::collections::HashSet<String> = transcripts
+    let _genes_with_transcripts: std::collections::HashSet<String> = transcripts
         .values()
         .map(|t| t.parent_gene.clone())
         .collect();

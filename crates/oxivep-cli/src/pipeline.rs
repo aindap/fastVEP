@@ -897,6 +897,7 @@ fn convert_ins_to_dup_range(
 }
 
 /// Convert intronic insertion to dup notation with explicit start/end offsets (non-coding).
+#[allow(dead_code)]
 fn convert_ins_to_dup_range_noncoding(
     hgvsc: &str,
     start_offset: i64,
@@ -978,7 +979,7 @@ fn three_prime_shift_intronic(
     match (ref_allele, alt_allele) {
         // Deletion: shift the deleted bases toward 3' end
         (Allele::Sequence(ref_bases), Allele::Deletion) if !ref_bases.is_empty() => {
-            let del_len = ref_bases.len() as u64;
+            let _del_len = ref_bases.len() as u64;
             let mut s = start;
             let mut e = end;
 
