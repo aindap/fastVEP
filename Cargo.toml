@@ -7,6 +7,7 @@ members = [
     "crates/oxivep-hgvs",
     "crates/oxivep-io",
     "crates/oxivep-filter",
+    "crates/oxivep-sa",
     "crates/oxivep-cli",
 ]
 resolver = "2"
@@ -26,6 +27,7 @@ oxivep-consequence = { path = "crates/oxivep-consequence" }
 oxivep-hgvs = { path = "crates/oxivep-hgvs" }
 oxivep-io = { path = "crates/oxivep-io" }
 oxivep-filter = { path = "crates/oxivep-filter" }
+oxivep-sa = { path = "crates/oxivep-sa" }
 
 # External crates
 anyhow = "1"
@@ -44,4 +46,11 @@ noodles-core = "0.19"
 noodles-tabix = "0.61"
 noodles-csi = "0.55"
 bincode = "1"
+zstd = "0.13"
 tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
