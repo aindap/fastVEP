@@ -179,3 +179,139 @@ fn test_positional_annotation() {
         other => panic!("Expected Positional, got {:?}", other),
     }
 }
+
+// =============================================================================
+// V2 Format (.osa2) Round-Trip Tests
+// =============================================================================
+
+#[test]
+fn test_osa2_writer_reader_round_trip() {
+    use oxivep_sa::fields::{Field, FieldType};
+    use oxivep_sa::writer_v2::{Osa2Metadata, Osa2Record, Osa2Writer};
+    use oxivep_sa::reader_v2::Osa2Reader;
+    use std::io::Cursor;
+
+    let dir = tempfile::tempdir().unwrap();
+    let osa2_path = dir.path().join("test_gnomad.osa2");
+
+    let metadata = Osa2Metadata {
+        format_version: 2,
+        name: "gnomAD".into(),
+        version: "4.1".into(),
+        assembly: "GRCh38".into(),
+        json_key: "gnomad".into(),
+        match_by_allele: true,
+        is_array: false,
+        is_positional: false,
+        chunk_bits: 20,
+        description: "Test gnomAD data".into(),
+    };
+
+    let fields = vec![
+        Field {
+            field: "AF".into(), alias: "allAf".into(), ftype: FieldType::Float,
+            multiplier: 2_000_000, zigzag: false, missing_value: u32::MAX,
+            missing_string: ".".into(), description: String::new(),
+        },
+        Field {
+            field: "AC".into(), alias: "allAc".into(), ftype: FieldType::Integer,
+            multiplier: 1, zigzag: false, missing_value: u32::MAX,
+            missing_string: ".".into(), description: String::new(),
+        },
+    ];
+
+    // Create records: 500 variants on chr1 across multiple chunks
+    let records: Vec<Osa2Record> = (0..500)
+        .map(|i| {
+            let pos = 10_000 + i * 100; // Spread across positions
+            let af = (i as f64 + 1.0) / 100_000.0;
+            Osa2Record {
+                chrom: "chr1".into(),
+                position: pos,
+                ref_allele: b"A".to_vec(),
+                alt_allele: b"G".to_vec(),
+                values: vec![
+                    fields[0].encode_float(af),  // AF
+                    (i + 1) as u32,              // AC
+                ],
+                json_blob: None,
+            }
+        })
+        .collect();
+
+    let writer = Osa2Writer::new(metadata.clone(), fields.clone());
+    let file = std::fs::File::create(&osa2_path).unwrap();
+    writer.write_all(file, &records).unwrap();
+
+    // Open and query
+    let reader = Osa2Reader::open(&osa2_path).unwrap();
+    assert_eq!(reader.name(), "gnomAD");
+    assert_eq!(reader.json_key(), "gnomad");
+
+    // Query a known position
+    let result = reader.annotate_position("chr1", 10_000 + 50 * 100, "A", "G").unwrap();
+    assert!(result.is_some(), "Expected annotation at position {}", 10_000 + 50 * 100);
+    let json = match result.unwrap() {
+        oxivep_cache::annotation::AnnotationValue::Json(j) => j,
+        other => panic!("Expected Json, got {:?}", other),
+    };
+    // Should contain allAf and allAc fields
+    assert!(json.contains("\"allAf\":"), "JSON missing allAf: {}", json);
+    assert!(json.contains("\"allAc\":51"), "JSON missing allAc:51: {}", json);
+
+    // Query with wrong allele should miss
+    let result = reader.annotate_position("chr1", 10_000 + 50 * 100, "A", "T").unwrap();
+    assert!(result.is_none(), "Wrong allele should not match");
+
+    // Query non-existent position
+    let result = reader.annotate_position("chr1", 99999, "A", "G").unwrap();
+    assert!(result.is_none());
+}
+
+#[test]
+fn test_osa2_preload() {
+    use oxivep_sa::fields::{Field, FieldType};
+    use oxivep_sa::writer_v2::{Osa2Metadata, Osa2Record, Osa2Writer};
+    use oxivep_sa::reader_v2::Osa2Reader;
+
+    let dir = tempfile::tempdir().unwrap();
+    let osa2_path = dir.path().join("test_preload.osa2");
+
+    let metadata = Osa2Metadata {
+        format_version: 2, name: "test".into(), version: "1.0".into(),
+        assembly: "GRCh38".into(), json_key: "test".into(),
+        match_by_allele: true, is_array: false, is_positional: false,
+        chunk_bits: 20, description: String::new(),
+    };
+
+    let fields = vec![Field {
+        field: "score".into(), alias: "score".into(), ftype: FieldType::Integer,
+        multiplier: 1, zigzag: false, missing_value: u32::MAX,
+        missing_string: ".".into(), description: String::new(),
+    }];
+
+    let records: Vec<Osa2Record> = (0..100)
+        .map(|i| Osa2Record {
+            chrom: "chr1".into(),
+            position: 1000 + i * 10,
+            ref_allele: b"C".to_vec(),
+            alt_allele: b"T".to_vec(),
+            values: vec![i as u32 + 1],
+            json_blob: None,
+        })
+        .collect();
+
+    let writer = Osa2Writer::new(metadata, fields);
+    let file = std::fs::File::create(&osa2_path).unwrap();
+    writer.write_all(file, &records).unwrap();
+
+    let reader = Osa2Reader::open(&osa2_path).unwrap();
+
+    // Preload positions
+    let positions: Vec<u64> = (0..50).map(|i| 1000 + i * 10).collect();
+    reader.preload("chr1", &positions).unwrap();
+
+    // Query preloaded position
+    let result = reader.annotate_position("chr1", 1050, "C", "T").unwrap();
+    assert!(result.is_some());
+}

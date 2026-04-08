@@ -1,23 +1,27 @@
 //! OxiSA: Supplementary annotation format for OxiVEP.
 //!
-//! This crate provides binary reader/writer for three annotation file types:
+//! Two format generations:
+//! - **v1 (.osa)**: Zstd block-compressed with per-entry JSON strings
+//! - **v2 (.osa2)**: ZIP-based chunked format with Var32 encoding, parallel
+//!   u32 value arrays, delta encoding, and LRU chunk caching (echtvar-inspired)
 //!
-//! - **`.osa`** — Position/allele-level annotations (ClinVar, gnomAD, dbSNP, etc.)
+//! Additional formats:
 //! - **`.osi`** — Interval-level annotations (SV databases, regulatory regions)
 //! - **`.oga`** — Gene-level annotations (OMIM, pLI scores, ClinGen)
-//!
-//! All formats use zstd block compression with per-chromosome indexing for
-//! fast random access during parallel annotation.
 
 pub mod block;
+pub mod chunk;
 pub mod common;
 pub mod custom;
+pub mod fields;
 pub mod gene;
 pub mod index;
 pub mod interval;
 pub mod kmer16;
 pub mod reader;
+pub mod reader_v2;
 pub mod sources;
 pub mod var32;
 pub mod writer;
+pub mod writer_v2;
 pub mod zigzag;

@@ -1888,6 +1888,7 @@ pub fn load_sa_providers(
     sa_dir: &Path,
 ) -> Result<Vec<Box<dyn oxivep_cache::annotation::AnnotationProvider>>> {
     use oxivep_sa::reader::SaReader;
+    use oxivep_sa::reader_v2::Osa2Reader;
 
     let mut providers: Vec<Box<dyn oxivep_cache::annotation::AnnotationProvider>> = Vec::new();
 
@@ -1898,24 +1899,48 @@ pub fn load_sa_providers(
     for entry in std::fs::read_dir(sa_dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) == Some("osa") {
-            match SaReader::open(&path) {
-                Ok(reader) => {
-                    eprintln!(
-                        "Loaded SA provider: {} ({})",
-                        reader.name(),
-                        path.display()
-                    );
-                    providers.push(Box::new(reader));
-                }
-                Err(e) => {
-                    eprintln!(
-                        "Warning: could not load SA file {}: {}",
-                        path.display(),
-                        e
-                    );
+        let ext = path.extension().and_then(|e| e.to_str());
+
+        match ext {
+            // v2 format (echtvar-inspired chunked ZIP)
+            Some("osa2") => {
+                match Osa2Reader::open(&path) {
+                    Ok(reader) => {
+                        eprintln!(
+                            "Loaded SA v2 provider: {} ({})",
+                            reader.name(),
+                            path.display()
+                        );
+                        providers.push(Box::new(reader));
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "Warning: could not load .osa2 file {}: {}",
+                            path.display(), e
+                        );
+                    }
                 }
             }
+            // v1 format (original zstd blocks)
+            Some("osa") => {
+                match SaReader::open(&path) {
+                    Ok(reader) => {
+                        eprintln!(
+                            "Loaded SA provider: {} ({})",
+                            reader.name(),
+                            path.display()
+                        );
+                        providers.push(Box::new(reader));
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "Warning: could not load .osa file {}: {}",
+                            path.display(), e
+                        );
+                    }
+                }
+            }
+            _ => {}
         }
     }
 

@@ -47,6 +47,8 @@ noodles-tabix = "0.61"
 noodles-csi = "0.55"
 bincode = "1"
 zstd = "0.13"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+lru = "0.12"
 tempfile = "3"
 
 [profile.release]

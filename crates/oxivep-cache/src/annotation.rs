@@ -79,6 +79,25 @@ pub trait AnnotationProvider: Send + Sync {
     fn preload(&self, _chrom: &str, _positions: &[u64]) -> Result<()> {
         Ok(())
     }
+
+    /// Annotate a batch of variants on the same chromosome in a single call.
+    ///
+    /// Default implementation calls `annotate_position()` in a loop.
+    /// High-performance readers (e.g., Osa2Reader) can override this to
+    /// load chunks once and serve multiple queries.
+    fn annotate_batch(
+        &self,
+        chrom: &str,
+        variants: &[(u64, &str, &str)], // (pos, ref_allele, alt_allele)
+        results: &mut Vec<Option<AnnotationValue>>,
+    ) -> Result<()> {
+        results.clear();
+        results.reserve(variants.len());
+        for &(pos, ref_a, alt_a) in variants {
+            results.push(self.annotate_position(chrom, pos, ref_a, alt_a)?);
+        }
+        Ok(())
+    }
 }
 
 /// Trait for providing gene-level annotations (OMIM, pLI scores, etc.).
