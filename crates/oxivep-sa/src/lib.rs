@@ -11,6 +11,7 @@
 
 pub mod block;
 pub mod common;
+pub mod custom;
 pub mod gene;
 pub mod index;
 pub mod interval;

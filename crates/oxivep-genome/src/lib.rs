@@ -1,4 +1,5 @@
 pub mod codon;
+pub mod mitochondrial;
 mod transcript;
 
 pub use codon::CodonTable;

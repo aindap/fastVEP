@@ -63,6 +63,22 @@ impl CodonTable {
         Self { table }
     }
 
+    /// Create a codon table from an NCBI translation table number.
+    /// Currently supports table 1 (standard) and table 2 (vertebrate mitochondrial).
+    pub fn from_ncbi_table(table_num: u8) -> Self {
+        let mut table = Self::standard();
+        if table_num == 2 {
+            // Vertebrate mitochondrial differences:
+            // AGA -> Stop (was Arg), AGG -> Stop (was Arg)
+            // ATA -> Met (was Ile), TGA -> Trp (was Stop)
+            table.table.insert(*b"AGA", b'*');
+            table.table.insert(*b"AGG", b'*');
+            table.table.insert(*b"ATA", b'M');
+            table.table.insert(*b"TGA", b'W');
+        }
+        table
+    }
+
     /// Translate a 3-base codon to an amino acid.
     /// Returns 'X' for unknown codons (e.g., containing N).
     pub fn translate(&self, codon: &[u8; 3]) -> u8 {
