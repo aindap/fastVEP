@@ -4,7 +4,7 @@
 //! for O(1) block lookups. Supports preloading for batch annotation.
 
 use crate::block::{BlockEntry, SaBlock};
-use crate::common::OSA_MAGIC;
+use crate::common::{ChromMap, OSA_MAGIC};
 use crate::index::SaIndex;
 use anyhow::Result;
 use memmap2::Mmap;
@@ -23,9 +23,10 @@ pub struct SaReader {
     mmap: Mmap,
     index: SaIndex,
     metadata: SaMetadata,
-    /// Cache of decompressed entries keyed by (chrom, position).
+    chrom_map: ChromMap,
+    /// Cache of decompressed entries keyed by (chrom_idx, block_start_pos).
     /// Written during preload (sequential), read during annotation (parallel).
-    preloaded: UnsafeCell<HashMap<(String, u32), Vec<BlockEntry>>>,
+    preloaded: UnsafeCell<HashMap<(u16, u32), Vec<BlockEntry>>>,
 }
 
 // SAFETY: preloaded is written only during preload() which runs sequentially
@@ -66,6 +67,7 @@ impl SaReader {
             mmap,
             index,
             metadata,
+            chrom_map: ChromMap::standard_human(),
             preloaded: UnsafeCell::new(HashMap::new()),
         })
     }
@@ -87,10 +89,12 @@ impl SaReader {
     /// Query annotations for a specific position and allele.
     /// First checks preloaded cache, then falls back to direct read.
     fn query(&self, chrom: &str, position: u32, ref_allele: &str, alt_allele: &str) -> Result<Option<String>> {
-        // Check preloaded cache first
+        // Check preloaded cache first (uses chrom index for fast lookup)
         let preloaded = unsafe { &*self.preloaded.get() };
-        if let Some(entries) = preloaded.get(&(chrom.to_string(), position)) {
-            return Ok(self.find_match(entries, position, ref_allele, alt_allele));
+        if let Some(chrom_idx) = self.chrom_map.get(chrom) {
+            if let Some(entries) = preloaded.get(&(chrom_idx, position)) {
+                return Ok(self.find_match(entries, position, ref_allele, alt_allele));
+            }
         }
 
         // Fall back to direct block read
@@ -106,25 +110,12 @@ impl SaReader {
     }
 
     fn find_match(&self, entries: &[BlockEntry], position: u32, ref_allele: &str, alt_allele: &str) -> Option<String> {
-        for entry in entries {
-            if entry.position != position {
-                continue;
-            }
-            if self.metadata.is_positional {
-                // Positional: match by position only
-                return Some(entry.json.clone());
-            }
-            if self.metadata.match_by_allele {
-                // Allele-specific: match ref+alt
-                if entry.ref_allele == ref_allele && entry.alt_allele == alt_allele {
-                    return Some(entry.json.clone());
-                }
-            } else {
-                // Position-level but not positional: return first at this position
-                return Some(entry.json.clone());
-            }
-        }
-        None
+        // Use binary search by position (entries are sorted after Phase 1 block changes)
+        let allele_ref = if self.metadata.match_by_allele { ref_allele } else { "" };
+        let allele_alt = if self.metadata.match_by_allele { alt_allele } else { "" };
+
+        SaBlock::find_by_position(entries, position, allele_ref, allele_alt, self.metadata.is_positional)
+            .map(|idx| entries[idx].json.clone())
     }
 }
 
@@ -165,6 +156,7 @@ impl AnnotationProvider for SaReader {
             return Ok(());
         }
 
+        let chrom_idx = self.chrom_map.get(chrom).unwrap_or(255);
         let cache = unsafe { &mut *self.preloaded.get() };
         cache.clear();
 
@@ -176,10 +168,10 @@ impl AnnotationProvider for SaReader {
 
         for block_ref in block_refs {
             let entries = self.read_block(block_ref.file_offset, block_ref.compressed_len)?;
-            // Group entries by position for fast lookup
+            // Group entries by position for fast lookup (using chrom index, not String)
             for entry in entries {
                 cache
-                    .entry((chrom.to_string(), entry.position))
+                    .entry((chrom_idx, entry.position))
                     .or_insert_with(Vec::new)
                     .push(entry);
             }

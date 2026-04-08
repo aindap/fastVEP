@@ -64,14 +64,20 @@ impl SaBlock {
         self.entries.len()
     }
 
-    /// Serialize and compress the block. Returns compressed bytes.
+    /// Serialize and compress the block. Entries are sorted by position before
+    /// compression to enable binary search on decompressed data.
     pub fn compress(&self) -> Result<Vec<u8>> {
+        // Sort entries by position for binary search support
+        let mut sorted: Vec<usize> = (0..self.entries.len()).collect();
+        sorted.sort_by_key(|&i| self.entries[i].position);
+
         let mut raw = Vec::with_capacity(self.uncompressed_size);
 
         // Write number of entries
         raw.extend_from_slice(&(self.entries.len() as u32).to_le_bytes());
 
-        for entry in &self.entries {
+        for &idx in &sorted {
+            let entry = &self.entries[idx];
             // Position (4 bytes)
             raw.extend_from_slice(&entry.position.to_le_bytes());
             // Ref allele (2-byte length + data)
@@ -136,6 +142,41 @@ impl SaBlock {
         }
 
         Ok(entries)
+    }
+
+    /// Binary search for a variant in sorted decompressed entries.
+    ///
+    /// Uses Var32 encoding to find the entry index, then verifies the full
+    /// allele match (handles long variants that can't be Var32-encoded).
+    pub fn find_by_position(
+        entries: &[BlockEntry],
+        position: u32,
+        ref_allele: &str,
+        alt_allele: &str,
+        is_positional: bool,
+    ) -> Option<usize> {
+        if is_positional {
+            // Positional: binary search by position only
+            let idx = entries.partition_point(|e| e.position < position);
+            if idx < entries.len() && entries[idx].position == position {
+                return Some(idx);
+            }
+            return None;
+        }
+
+        // Find the first entry at this position via binary search
+        let start = entries.partition_point(|e| e.position < position);
+
+        // Linear scan among entries at the same position (usually just 1-3)
+        for i in start..entries.len() {
+            if entries[i].position != position {
+                break;
+            }
+            if entries[i].ref_allele == ref_allele && entries[i].alt_allele == alt_allele {
+                return Some(i);
+            }
+        }
+        None
     }
 
     /// Reset the block for reuse.

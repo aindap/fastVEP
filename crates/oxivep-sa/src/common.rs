@@ -58,6 +58,37 @@ pub struct IntervalRecord {
     pub json: String,
 }
 
+/// Chromosome name to index mapping for efficient lookups.
+#[derive(Debug, Clone)]
+pub struct ChromMap {
+    name_to_idx: std::collections::HashMap<String, u16>,
+}
+
+impl ChromMap {
+    /// Create a standard human chromosome mapping (chr1-22, chrX, chrY, chrM).
+    pub fn standard_human() -> Self {
+        let mut map = std::collections::HashMap::new();
+        for i in 1..=22u16 {
+            map.insert(format!("chr{}", i), i - 1);
+            map.insert(format!("{}", i), i - 1);
+        }
+        map.insert("chrX".into(), 22);
+        map.insert("X".into(), 22);
+        map.insert("chrY".into(), 23);
+        map.insert("Y".into(), 23);
+        map.insert("chrM".into(), 24);
+        map.insert("MT".into(), 24);
+        map.insert("chrMT".into(), 24);
+        Self { name_to_idx: map }
+    }
+
+    /// Look up a chromosome index by name.
+    #[inline]
+    pub fn get(&self, name: &str) -> Option<u16> {
+        self.name_to_idx.get(name).copied()
+    }
+}
+
 /// A single gene annotation record.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GeneRecord {
