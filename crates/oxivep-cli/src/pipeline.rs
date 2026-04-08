@@ -1709,7 +1709,73 @@ pub fn run_sa_build(source: &str, input: &str, output: &str, assembly: &str) -> 
             is_array: false,
             is_positional: false,
         },
-        _ => anyhow::bail!("Unknown source: {}. Supported: clinvar, gnomad, dbsnp", source),
+        "phylop" | "gerp" | "dann" => {
+            let json_key = match source {
+                "phylop" => "phylopScore",
+                "gerp" => "gerpScore",
+                "dann" => "dannScore",
+                _ => unreachable!(),
+            };
+            IndexHeader {
+                schema_version: oxivep_sa::common::SCHEMA_VERSION,
+                json_key: json_key.into(),
+                name: source.to_uppercase().into(),
+                version: "latest".into(),
+                description: format!("{} conservation/prediction scores for {}", source, assembly),
+                assembly: assembly.into(),
+                match_by_allele: false,
+                is_array: false,
+                is_positional: true,
+            }
+        },
+        "revel" => IndexHeader {
+            schema_version: oxivep_sa::common::SCHEMA_VERSION,
+            json_key: "revel".into(),
+            name: "REVEL".into(),
+            version: "latest".into(),
+            description: format!("REVEL missense pathogenicity scores for {}", assembly),
+            assembly: assembly.into(),
+            match_by_allele: true,
+            is_array: false,
+            is_positional: false,
+        },
+        "spliceai" => IndexHeader {
+            schema_version: oxivep_sa::common::SCHEMA_VERSION,
+            json_key: "spliceAI".into(),
+            name: "SpliceAI".into(),
+            version: "latest".into(),
+            description: format!("SpliceAI splice site predictions for {}", assembly),
+            assembly: assembly.into(),
+            match_by_allele: true,
+            is_array: false,
+            is_positional: false,
+        },
+        "primateai" => IndexHeader {
+            schema_version: oxivep_sa::common::SCHEMA_VERSION,
+            json_key: "primateAI".into(),
+            name: "PrimateAI".into(),
+            version: "latest".into(),
+            description: format!("PrimateAI pathogenicity predictions for {}", assembly),
+            assembly: assembly.into(),
+            match_by_allele: true,
+            is_array: false,
+            is_positional: false,
+        },
+        "dbnsfp" => IndexHeader {
+            schema_version: oxivep_sa::common::SCHEMA_VERSION,
+            json_key: "dbnsfp".into(),
+            name: "dbNSFP".into(),
+            version: "latest".into(),
+            description: format!("dbNSFP SIFT/PolyPhen predictions for {}", assembly),
+            assembly: assembly.into(),
+            match_by_allele: true,
+            is_array: false,
+            is_positional: false,
+        },
+        _ => anyhow::bail!(
+            "Unknown source: {}. Supported: clinvar, gnomad, dbsnp, phylop, gerp, dann, revel, spliceai, primateai, dbnsfp",
+            source
+        ),
     };
 
     eprintln!("Building {} .osa from: {}", source, input);
@@ -1727,6 +1793,12 @@ pub fn run_sa_build(source: &str, input: &str, output: &str, assembly: &str) -> 
         "clinvar" => oxivep_sa::sources::clinvar::parse_clinvar_vcf(buf_reader, &chrom_map)?,
         "gnomad" => oxivep_sa::sources::gnomad::parse_gnomad_vcf(buf_reader, &chrom_map)?,
         "dbsnp" => oxivep_sa::sources::dbsnp::parse_dbsnp_vcf(buf_reader, &chrom_map)?,
+        "phylop" => oxivep_sa::sources::scores::parse_wigfix(buf_reader, &chrom_map)?,
+        "gerp" | "dann" => oxivep_sa::sources::scores::parse_score_tsv(buf_reader, &chrom_map, false)?,
+        "revel" => oxivep_sa::sources::revel::parse_revel(buf_reader, &chrom_map, 2)?,
+        "spliceai" => oxivep_sa::sources::spliceai::parse_spliceai_vcf(buf_reader, &chrom_map)?,
+        "primateai" => oxivep_sa::sources::primateai::parse_primateai(buf_reader, &chrom_map)?,
+        "dbnsfp" => oxivep_sa::sources::dbnsfp::parse_dbnsfp(buf_reader, &chrom_map)?,
         _ => unreachable!(),
     };
 

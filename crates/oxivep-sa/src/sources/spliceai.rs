@@ -1,0 +1,139 @@
+//! SpliceAI VCF parser for building .osa annotation files.
+//!
+//! SpliceAI provides splice site effect predictions with delta scores
+//! for acceptor/donor gain/loss and their positions.
+
+use crate::common::AnnotationRecord;
+use anyhow::{Context, Result};
+use std::collections::HashMap;
+use std::io::BufRead;
+
+/// Parse a SpliceAI VCF and produce sorted AnnotationRecords.
+///
+/// SpliceAI INFO field format:
+/// `SpliceAI=A|GENE|DS_AG|DS_AL|DS_DG|DS_DL|DP_AG|DP_AL|DP_DG|DP_DL`
+pub fn parse_spliceai_vcf<R: BufRead>(
+    reader: R,
+    chrom_to_idx: &HashMap<String, u16>,
+) -> Result<Vec<AnnotationRecord>> {
+    let mut records = Vec::new();
+
+    for line in reader.lines() {
+        let line = line.context("Reading SpliceAI VCF line")?;
+        if line.starts_with('#') {
+            continue;
+        }
+
+        let fields: Vec<&str> = line.splitn(9, '\t').collect();
+        if fields.len() < 8 {
+            continue;
+        }
+
+        let chrom = normalize_chrom(fields[0]);
+        let chrom_idx = match chrom_to_idx.get(&chrom) {
+            Some(&idx) => idx,
+            None => continue,
+        };
+
+        let pos: u32 = match fields[1].parse() {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+
+        let ref_allele = fields[3].to_string();
+        let info = fields[7];
+
+        // Extract SpliceAI annotations from INFO
+        for pair in info.split(';') {
+            if let Some(val) = pair.strip_prefix("SpliceAI=") {
+                // Can have multiple allele annotations separated by comma
+                for entry in val.split(',') {
+                    if let Some(record) = parse_spliceai_entry(chrom_idx, pos, &ref_allele, entry) {
+                        records.push(record);
+                    }
+                }
+            }
+        }
+    }
+
+    records.sort_by(|a, b| a.chrom_idx.cmp(&b.chrom_idx).then(a.position.cmp(&b.position)));
+    Ok(records)
+}
+
+fn parse_spliceai_entry(
+    chrom_idx: u16,
+    position: u32,
+    ref_allele: &str,
+    entry: &str,
+) -> Option<AnnotationRecord> {
+    let parts: Vec<&str> = entry.split('|').collect();
+    if parts.len() < 10 {
+        return None;
+    }
+
+    let alt_allele = parts[0].to_string();
+    let gene = parts[1];
+    let ds_ag: f64 = parts[2].parse().ok()?;
+    let ds_al: f64 = parts[3].parse().ok()?;
+    let ds_dg: f64 = parts[4].parse().ok()?;
+    let ds_dl: f64 = parts[5].parse().ok()?;
+    let dp_ag: i32 = parts[6].parse().ok()?;
+    let dp_al: i32 = parts[7].parse().ok()?;
+    let dp_dg: i32 = parts[8].parse().ok()?;
+    let dp_dl: i32 = parts[9].parse().ok()?;
+
+    let json = format!(
+        r#"{{"gene":"{}","dsAg":{:.2},"dsAl":{:.2},"dsDg":{:.2},"dsDl":{:.2},"dpAg":{},"dpAl":{},"dpDg":{},"dpDl":{}}}"#,
+        gene, ds_ag, ds_al, ds_dg, ds_dl, dp_ag, dp_al, dp_dg, dp_dl
+    );
+
+    Some(AnnotationRecord {
+        chrom_idx,
+        position,
+        ref_allele: ref_allele.to_string(),
+        alt_allele,
+        json,
+    })
+}
+
+fn normalize_chrom(chrom: &str) -> String {
+    if chrom.starts_with("chr") {
+        chrom.to_string()
+    } else {
+        format!("chr{}", chrom)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_spliceai_vcf() {
+        let vcf = "\
+##fileformat=VCFv4.0
+##INFO=<ID=SpliceAI,Number=.,Type=String>
+#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO
+1\t25000\t.\tA\tG\t.\t.\tSpliceAI=G|GENE1|0.01|0.00|0.85|0.00|5|-28|2|-13
+1\t30000\t.\tC\tT,A\t.\t.\tSpliceAI=T|GENE2|0.00|0.10|0.00|0.92|3|-5|10|-2,A|GENE2|0.50|0.00|0.00|0.00|7|0|0|0
+";
+        let mut chrom_map = HashMap::new();
+        chrom_map.insert("chr1".into(), 0u16);
+
+        let records = parse_spliceai_vcf(vcf.as_bytes(), &chrom_map).unwrap();
+        assert_eq!(records.len(), 3);
+
+        assert_eq!(records[0].position, 25000);
+        assert_eq!(records[0].alt_allele, "G");
+        assert!(records[0].json.contains("GENE1"));
+        assert!(records[0].json.contains("\"dsDg\":0.85"));
+
+        assert_eq!(records[1].position, 30000);
+        assert_eq!(records[1].alt_allele, "T");
+        assert!(records[1].json.contains("\"dsDl\":0.92"));
+
+        assert_eq!(records[2].position, 30000);
+        assert_eq!(records[2].alt_allele, "A");
+        assert!(records[2].json.contains("\"dsAg\":0.50"));
+    }
+}
