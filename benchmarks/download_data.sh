@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Download gold-standard benchmark data for OxiVEP
+# Download gold-standard benchmark data for fastVEP
 #
 # Downloads reference genomes (GFF3 + FASTA) and gold-standard variant call sets
 # from authoritative sources for each model organism.

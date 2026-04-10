@@ -1,15 +1,15 @@
 [workspace]
 members = [
-    "crates/oxivep-core",
-    "crates/oxivep-genome",
-    "crates/oxivep-cache",
-    "crates/oxivep-consequence",
-    "crates/oxivep-hgvs",
-    "crates/oxivep-io",
-    "crates/oxivep-filter",
-    "crates/oxivep-sa",
-    "crates/oxivep-cli",
-    "crates/oxivep-web",
+    "crates/fastvep-core",
+    "crates/fastvep-genome",
+    "crates/fastvep-cache",
+    "crates/fastvep-consequence",
+    "crates/fastvep-hgvs",
+    "crates/fastvep-io",
+    "crates/fastvep-filter",
+    "crates/fastvep-sa",
+    "crates/fastvep-cli",
+    "crates/fastvep-web",
 ]
 resolver = "2"
 
@@ -21,14 +21,14 @@ description = "A high-performance variant effect predictor with clinical databas
 
 [workspace.dependencies]
 # Internal crates
-oxivep-core = { path = "crates/oxivep-core" }
-oxivep-genome = { path = "crates/oxivep-genome" }
-oxivep-cache = { path = "crates/oxivep-cache" }
-oxivep-consequence = { path = "crates/oxivep-consequence" }
-oxivep-hgvs = { path = "crates/oxivep-hgvs" }
-oxivep-io = { path = "crates/oxivep-io" }
-oxivep-filter = { path = "crates/oxivep-filter" }
-oxivep-sa = { path = "crates/oxivep-sa" }
+fastvep-core = { path = "crates/fastvep-core" }
+fastvep-genome = { path = "crates/fastvep-genome" }
+fastvep-cache = { path = "crates/fastvep-cache" }
+fastvep-consequence = { path = "crates/fastvep-consequence" }
+fastvep-hgvs = { path = "crates/fastvep-hgvs" }
+fastvep-io = { path = "crates/fastvep-io" }
+fastvep-filter = { path = "crates/fastvep-filter" }
+fastvep-sa = { path = "crates/fastvep-sa" }
 
 # External crates
 anyhow = "1"

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# OxiVEP Multi-Organism Benchmark Suite
+# fastVEP Multi-Organism Benchmark Suite
 #
-# Benchmarks OxiVEP annotation performance across model organisms using
+# Benchmarks fastVEP annotation performance across model organisms using
 # real Ensembl annotations and gold-standard variant call sets.
 #
 # Data sources:
@@ -22,7 +22,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-OXIVEP="$PROJECT_DIR/target/release/oxivep"
+FASTVEP="$PROJECT_DIR/target/release/fastvep"
 OUTPUT_DIR="$SCRIPT_DIR/output"
 ORG_DATA="$PROJECT_DIR/test_data/organisms"
 HUMAN_DIR="$ORG_DATA/human"
@@ -38,7 +38,7 @@ NC='\033[0m'
 print_header() {
     echo ""
     echo -e "${BOLD}============================================================${NC}"
-    echo -e "${BOLD}  OxiVEP Multi-Organism Benchmark Suite${NC}"
+    echo -e "${BOLD}  fastVEP Multi-Organism Benchmark Suite${NC}"
     echo -e "${BOLD}============================================================${NC}"
     echo ""
 }
@@ -49,10 +49,10 @@ print_section() {
 }
 
 build_release() {
-    print_section "Building OxiVEP (release mode with LTO)"
+    print_section "Building fastVEP (release mode with LTO)"
     cd "$PROJECT_DIR"
     cargo build --release 2>&1 | tail -1
-    if [ ! -f "$OXIVEP" ]; then
+    if [ ! -f "$FASTVEP" ]; then
         echo -e "${RED}ERROR: Build failed.${NC}"
         exit 1
     fi
@@ -77,7 +77,7 @@ time_run() {
 
     local start end
     start=$(python3 -c 'import time; print(int(time.time()*1e9))')
-    "$OXIVEP" annotate \
+    "$FASTVEP" annotate \
         --input "$input_vcf" \
         --gff3 "$gff3" \
         "${fasta_args[@]}" \
@@ -111,9 +111,9 @@ warm_cache() {
     local cache_file
 
     if [[ "$gff3" == *.gz ]]; then
-        cache_file="${gff3%.gz}.oxivep.cache"
+        cache_file="${gff3%.gz}.fastvep.cache"
     else
-        cache_file="${gff3}.oxivep.cache"
+        cache_file="${gff3}.fastvep.cache"
     fi
 
     if [[ -f "$cache_file" ]]; then
@@ -123,7 +123,7 @@ warm_cache() {
 
     echo -e "  ${YELLOW}Building cache for $(basename $gff3)...${NC}"
     local tmp_vcf
-    tmp_vcf=$(mktemp /tmp/oxivep_warm_XXXXXX.vcf)
+    tmp_vcf=$(mktemp /tmp/fastvep_warm_XXXXXX.vcf)
     local chrom
     chrom=$(grep -m1 -v '^#' "$gff3" | cut -f1)
     printf '##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n%s\t1\t.\tA\tG\t.\tPASS\t.\n' "$chrom" > "$tmp_vcf"
@@ -133,7 +133,7 @@ warm_cache() {
         fasta_args="--fasta $fasta"
     fi
 
-    "$OXIVEP" annotate --input "$tmp_vcf" --gff3 "$gff3" $fasta_args \
+    "$FASTVEP" annotate --input "$tmp_vcf" --gff3 "$gff3" $fasta_args \
         --output /dev/null --output-format tab 2>/dev/null || true
     rm -f "$tmp_vcf"
 

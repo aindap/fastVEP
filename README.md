@@ -1,14 +1,14 @@
-# OxiVEP
+# fastVEP
 
-A high-performance Variant Effect Predictor written in Rust. OxiVEP predicts the functional consequences of genomic variants (SNPs, insertions, deletions, structural variants) on genes, transcripts, and protein sequences, with direct integration of clinical and population databases.
+A high-performance Variant Effect Predictor written in Rust. fastVEP predicts the functional consequences of genomic variants (SNPs, insertions, deletions, structural variants) on genes, transcripts, and protein sequences, with direct integration of clinical and population databases.
 
-OxiVEP is inspired by and aims to be compatible with [Ensembl VEP](https://www.ensembl.org/info/docs/tools/vep/index.html) and [Illumina Nirvana](https://github.com/Illumina/Nirvana), while delivering significantly better performance through Rust's zero-cost abstractions and native parallelism.
+fastVEP is inspired by and aims to be compatible with [Ensembl VEP](https://www.ensembl.org/info/docs/tools/vep/index.html) and [Illumina Nirvana](https://github.com/Illumina/Nirvana), while delivering significantly better performance through Rust's zero-cost abstractions and native parallelism.
 
 ## Features
 
 - **Variant Consequence Prediction** — Classifies variants using 49 [Sequence Ontology](http://www.sequenceontology.org/) terms (missense, frameshift, splice donor, copy_number_change, transcript_ablation, etc.)
 - **Structural Variant Support** — Full SV pipeline: `<DEL>`, `<DUP>`, `<INV>`, `<CNV>`, `<BND>`, `<INS>`, `<STR>` with SV-specific consequence prediction
-- **Supplementary Annotations** — Direct integration with ClinVar, gnomAD, dbSNP, COSMIC, 1000 Genomes, TOPMed, MitoMap via the native OxiSA format (v1: zstd block compression; v2: echtvar-inspired chunked ZIP with Var32 encoding, parallel u32 value arrays, delta encoding, and LRU caching)
+- **Supplementary Annotations** — Direct integration with ClinVar, gnomAD, dbSNP, COSMIC, 1000 Genomes, TOPMed, MitoMap via the native fastSA format (v1: zstd block compression; v2: echtvar-inspired chunked ZIP with Var32 encoding, parallel u32 value arrays, delta encoding, and LRU caching)
 - **Prediction Scores** — PhyloP, GERP, REVEL, SpliceAI, PrimateAI, DANN conservation and pathogenicity scores; SIFT/PolyPhen via dbNSFP
 - **Gene-Level Annotations** — OMIM phenotypes, gnomAD gene constraint (pLI, LOEUF), ClinGen gene-disease validity
 - **Filter Engine** — Expression-based filtering compatible with VEP's filter_vep syntax
@@ -30,55 +30,55 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
 
-### 2. Build and install OxiVEP
+### 2. Build and install fastVEP
 
 ```bash
-git clone https://github.com/kuanlinhuang/OxiVEP.git
-cd OxiVEP
+git clone https://github.com/kuanlinhuang/fastVEP.git
+cd fastVEP
 
 # Build and install both binaries to ~/.cargo/bin/
-cargo install --path crates/oxivep-cli   # oxivep (CLI annotator)
-cargo install --path crates/oxivep-web   # oxivep-web (production web server)
+cargo install --path crates/fastvep-cli   # fastvep (CLI annotator)
+cargo install --path crates/fastvep-web   # fastvep-web (production web server)
 
 # Verify it works
-oxivep --version
+fastvep --version
 ```
 
-> **Note:** `cargo install` places the binary in `~/.cargo/bin/`. If `oxivep` is not found after install, run `source "$HOME/.cargo/env"` or add this line to your `~/.zshrc` (or `~/.bashrc`):
+> **Note:** `cargo install` places the binary in `~/.cargo/bin/`. If `fastvep` is not found after install, run `source "$HOME/.cargo/env"` or add this line to your `~/.zshrc` (or `~/.bashrc`):
 > ```bash
 > source "$HOME/.cargo/env"
 > ```
 
 ### 3. Try it — annotate the included test data
 
-OxiVEP ships with a small test VCF and GFF3 so you can try it immediately:
+fastVEP ships with a small test VCF and GFF3 so you can try it immediately:
 
 ```bash
 # Annotate 12 test variants covering SNVs, indels, splice sites, UTRs, and intergenic regions
-oxivep annotate -i tests/test.vcf --gff3 tests/test.gff3 --hgvs --output-format tab
+fastvep annotate -i tests/test.vcf --gff3 tests/test.gff3 --hgvs --output-format tab
 ```
 
 ### 4. Build supplementary annotation databases
 
 ```bash
 # Build ClinVar annotation database
-oxivep sa-build --source clinvar --input clinvar.vcf.gz --output clinvar
+fastvep sa-build --source clinvar --input clinvar.vcf.gz --output clinvar
 
 # Build gnomAD population frequency database
-oxivep sa-build --source gnomad --input gnomad.genomes.v4.vcf.bgz --output gnomad
+fastvep sa-build --source gnomad --input gnomad.genomes.v4.vcf.bgz --output gnomad
 
 # Build PhyloP conservation scores
-oxivep sa-build --source phylop --input hg38.phyloP100way.wigFix.gz --output phylop
+fastvep sa-build --source phylop --input hg38.phyloP100way.wigFix.gz --output phylop
 
 # Build SpliceAI predictions
-oxivep sa-build --source spliceai --input spliceai_scores.vcf.gz --output spliceai
+fastvep sa-build --source spliceai --input spliceai_scores.vcf.gz --output spliceai
 ```
 
 ### 5. Annotate with supplementary databases
 
 ```bash
 # Annotate with all databases in a directory
-oxivep annotate \
+fastvep annotate \
   -i your_variants.vcf \
   -o annotated.vcf \
   --gff3 Homo_sapiens.GRCh38.112.gff3 \
@@ -91,7 +91,7 @@ oxivep annotate \
 
 ```bash
 # Filter for high-impact or rare missense variants
-oxivep filter \
+fastvep filter \
   -i annotated.vcf \
   --filter "IMPACT is HIGH or (Consequence in missense_variant and AF < 0.001)"
 ```
@@ -100,22 +100,22 @@ oxivep filter \
 
 ```bash
 # Quick start — uses a built-in example gene model (OR4F5, chr1)
-oxivep-web
+fastvep-web
 
 # With your own data
-oxivep-web --gff3 Homo_sapiens.GRCh38.115.gff3 --fasta Homo_sapiens.GRCh38.dna.primary_assembly.fa
+fastvep-web --gff3 Homo_sapiens.GRCh38.115.gff3 --fasta Homo_sapiens.GRCh38.dna.primary_assembly.fa
 
 # With supplementary annotations (ClinVar, gnomAD, etc.)
-oxivep-web --gff3 genes.gff3 --fasta ref.fa --sa-dir /path/to/sa_databases/
+fastvep-web --gff3 genes.gff3 --fasta ref.fa --sa-dir /path/to/sa_databases/
 ```
 
 Open http://localhost:8080 in your browser. The web interface lets you paste VCF data, switch gene models, and view results in an interactive table.
 
-> **Note:** `oxivep-web` is a separate production-quality binary (axum/tokio, async, multi-connection). The legacy `oxivep web` command still works but is single-threaded.
+> **Note:** `fastvep-web` is a separate production-quality binary (axum/tokio, async, multi-connection). The legacy `fastvep web` command still works but is single-threaded.
 
 ## Local Setup Guide
 
-This section walks through setting up OxiVEP with full annotation capabilities (gene models, reference sequence, and supplementary databases like ClinVar and gnomAD).
+This section walks through setting up fastVEP with full annotation capabilities (gene models, reference sequence, and supplementary databases like ClinVar and gnomAD).
 
 ### Step 1: Download reference data
 
@@ -137,31 +137,31 @@ samtools faidx Homo_sapiens.GRCh38.dna.primary_assembly.fa
 
 ### Step 2: Build supplementary annotation databases
 
-Download source files and build OxiSA databases. Each build is a one-time operation.
+Download source files and build fastSA databases. Each build is a one-time operation.
 
 ```bash
 mkdir -p sa_databases
 
 # ClinVar — clinical variant significance (~30MB download)
 wget https://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38/clinvar.vcf.gz
-oxivep sa-build --source clinvar -i clinvar.vcf.gz -o sa_databases/clinvar --assembly GRCh38
+fastvep sa-build --source clinvar -i clinvar.vcf.gz -o sa_databases/clinvar --assembly GRCh38
 
 # gnomAD v4 — population allele frequencies (~25GB download per chromosome)
 # Download from https://gnomad.broadinstitute.org/downloads
-oxivep sa-build --source gnomad -i gnomad.genomes.v4.0.sites.vcf.bgz -o sa_databases/gnomad --assembly GRCh38
+fastvep sa-build --source gnomad -i gnomad.genomes.v4.0.sites.vcf.bgz -o sa_databases/gnomad --assembly GRCh38
 
 # dbSNP — variant identifiers
 wget https://ftp.ncbi.nih.gov/snp/latest_release/VCF/GCF_000001405.40.gz
-oxivep sa-build --source dbsnp -i GCF_000001405.40.gz -o sa_databases/dbsnp --assembly GRCh38
+fastvep sa-build --source dbsnp -i GCF_000001405.40.gz -o sa_databases/dbsnp --assembly GRCh38
 
 # COSMIC — somatic mutations (requires license, see https://cancer.sanger.ac.uk/cosmic/download)
-oxivep sa-build --source cosmic -i CosmicCodingMuts.vcf.gz -o sa_databases/cosmic --assembly GRCh38
+fastvep sa-build --source cosmic -i CosmicCodingMuts.vcf.gz -o sa_databases/cosmic --assembly GRCh38
 ```
 
 ### Step 3: Run the CLI annotator
 
 ```bash
-oxivep annotate \
+fastvep annotate \
   -i your_variants.vcf \
   -o annotated.vcf \
   --gff3 data/Homo_sapiens.GRCh38.115.gff3 \
@@ -174,17 +174,17 @@ oxivep annotate \
 
 ```bash
 # Install the web server binary
-cargo install --path crates/oxivep-web
+cargo install --path crates/fastvep-web
 
 # Run with all annotation sources
-oxivep-web \
+fastvep-web \
   --gff3 data/Homo_sapiens.GRCh38.115.gff3 \
   --fasta data/Homo_sapiens.GRCh38.dna.primary_assembly.fa \
   --sa-dir sa_databases/ \
   --port 8080
 ```
 
-All flags also accept environment variables (`OXIVEP_GFF3`, `OXIVEP_FASTA`, `OXIVEP_SA_DIR`, `OXIVEP_PORT`) for container deployments.
+All flags also accept environment variables (`FASTVEP_GFF3`, `FASTVEP_FASTA`, `FASTVEP_SA_DIR`, `FASTVEP_PORT`) for container deployments.
 
 ### Multi-organism setup
 
@@ -206,14 +206,14 @@ wget -P genomes/zebrafish/ https://ftp.ensembl.org/pub/release-115/gff3/danio_re
 gunzip genomes/zebrafish/Danio_rerio.GRCz11.115.gff3.gz
 
 # Run — users can switch genomes from the dropdown in the web UI
-oxivep-web --data-dir genomes/ --sa-dir sa_databases/
+fastvep-web --data-dir genomes/ --sa-dir sa_databases/
 ```
 
-OxiVEP works with any organism — just provide the matching GFF3 (and optionally FASTA for HGVS).
+fastVEP works with any organism — just provide the matching GFF3 (and optionally FASTA for HGVS).
 
 ## Supplementary Annotation Sources
 
-OxiVEP supports direct integration with clinical and population databases through its native OxiSA binary format. Build once with `oxivep sa-build`, then use `--sa-dir` to annotate:
+fastVEP supports direct integration with clinical and population databases through its native fastSA binary format. Build once with `fastvep sa-build`, then use `--sa-dir` to annotate:
 
 | Source | Type | Description | Build Command |
 |--------|------|-------------|---------------|
@@ -234,7 +234,7 @@ OxiVEP supports direct integration with clinical and population databases throug
 
 ## Command Reference
 
-### `oxivep annotate`
+### `fastvep annotate`
 
 | Flag | Description | Default |
 |------|-------------|---------|
@@ -250,7 +250,7 @@ OxiVEP supports direct integration with clinical and population databases throug
 | `--cache-dir` | Path to VEP cache directory for known variant annotation | -- |
 | `--transcript-cache` | Path to binary transcript cache file | -- |
 
-### `oxivep sa-build`
+### `fastvep sa-build`
 
 | Flag | Description | Default |
 |------|-------------|---------|
@@ -259,7 +259,7 @@ OxiVEP supports direct integration with clinical and population databases throug
 | `-o, --output` | Output base path (creates .osa and .osa.idx) | *required* |
 | `--assembly` | Genome assembly | `GRCh38` |
 
-### `oxivep filter`
+### `fastvep filter`
 
 | Flag | Description | Default |
 |------|-------------|---------|
@@ -276,7 +276,7 @@ IMPACT is HIGH and AF < 0.01
 (IMPACT is HIGH or IMPACT is MODERATE) and not Consequence is synonymous_variant
 ```
 
-### `oxivep-web` (production web server)
+### `fastvep-web` (production web server)
 
 | Flag | Description | Default |
 |------|-------------|---------|
@@ -284,13 +284,13 @@ IMPACT is HIGH and AF < 0.01
 | `--fasta` | Reference FASTA file | -- |
 | `--sa-dir` | Directory containing .osa/.osa2 supplementary annotation files | -- |
 | `--data-dir` | Directory of genome subdirectories (for multi-organism switching) | -- |
-| `--port` | HTTP port (also `OXIVEP_PORT` env) | `8080` |
-| `--bind` | Bind address (also `OXIVEP_BIND` env) | `0.0.0.0` |
+| `--port` | HTTP port (also `FASTVEP_PORT` env) | `8080` |
+| `--bind` | Bind address (also `FASTVEP_BIND` env) | `0.0.0.0` |
 | `--distance` | Upstream/downstream distance in bp | `5000` |
 | `--max-body-size` | Max request body in bytes | `10485760` |
 | `--max-concurrent` | Max concurrent annotation requests | `64` |
 
-### `oxivep cache`
+### `fastvep cache`
 
 | Flag | Description | Default |
 |------|-------------|---------|
@@ -314,7 +314,7 @@ Structured JSON with `transcript_consequences` array per variant, including supp
 
 ## Consequence Types
 
-OxiVEP predicts 49 consequence types organized by impact:
+fastVEP predicts 49 consequence types organized by impact:
 
 | Impact | Consequences |
 |--------|-------------|
@@ -327,14 +327,14 @@ OxiVEP predicts 49 consequence types organized by impact:
 
 ```
 crates/
-  oxivep-core/         # Core types: Consequence (49 SO terms), VariantType, Allele, Impact
-  oxivep-genome/       # Transcript, Exon, Gene, CodonTable, mitochondrial codon table
-  oxivep-cache/        # GFF3 parser, FASTA reader, annotation providers, regulatory regions
-  oxivep-consequence/  # Consequence prediction: small variants + SV predictor
-  oxivep-hgvs/         # HGVS nomenclature generation (c., p., g.)
-  oxivep-io/           # VCF parser (incl. SVs), output formatters, multi-sample parsing
-  oxivep-filter/       # Filter engine: lexer, parser, evaluator (filter_vep-compatible)
-  oxivep-sa/           # Supplementary annotation format (OxiSA):
+  fastvep-core/         # Core types: Consequence (49 SO terms), VariantType, Allele, Impact
+  fastvep-genome/       # Transcript, Exon, Gene, CodonTable, mitochondrial codon table
+  fastvep-cache/        # GFF3 parser, FASTA reader, annotation providers, regulatory regions
+  fastvep-consequence/  # Consequence prediction: small variants + SV predictor
+  fastvep-hgvs/         # HGVS nomenclature generation (c., p., g.)
+  fastvep-io/           # VCF parser (incl. SVs), output formatters, multi-sample parsing
+  fastvep-filter/       # Filter engine: lexer, parser, evaluator (filter_vep-compatible)
+  fastvep-sa/           # Supplementary annotation format (fastSA):
                        #   v1 (.osa): zstd block compression, binary search
                        #   v2 (.osa2): echtvar-inspired chunked ZIP with Var32 encoding,
                        #     parallel u32 value arrays, delta encoding, LRU chunk cache,
@@ -342,8 +342,8 @@ crates/
                        # Source parsers: ClinVar, gnomAD, dbSNP, COSMIC, 1000G, TOPMed,
                        # MitoMap, PhyloP, GERP, DANN, REVEL, SpliceAI, PrimateAI, dbNSFP
                        # Custom VCF/BED annotation providers
-  oxivep-cli/          # CLI binary: annotation pipeline, sa-build, legacy web server
-  oxivep-web/          # Production web server (axum/tokio): async, multi-connection,
+  fastvep-cli/          # CLI binary: annotation pipeline, sa-build, legacy web server
+  fastvep-web/          # Production web server (axum/tokio): async, multi-connection,
                        #   genome switching, SA integration, rate limiting
 web/                   # Web GUI (HTML/CSS/JS, embedded in both server binaries)
 tests/                 # Test data: chr1 (OR4F5) and chr17 (BRCA1) VCF + GFF3
@@ -353,9 +353,9 @@ tests/                 # Test data: chr1 (OR4F5) and chr17 (BRCA1) VCF + GFF3
 
 ```bash
 cargo test --workspace          # 233 tests
-cargo test -p oxivep-consequence  # Consequence prediction tests (incl. SV)
-cargo test -p oxivep-filter       # Filter engine tests
-cargo test -p oxivep-sa           # Supplementary annotation format tests
+cargo test -p fastvep-consequence  # Consequence prediction tests (incl. SV)
+cargo test -p fastvep-filter       # Filter engine tests
+cargo test -p fastvep-sa           # Supplementary annotation format tests
 ```
 
 ## Performance Benchmarks
@@ -374,7 +374,7 @@ Benchmarked on Apple M-series (ARM64), release build with LTO. Median of 3 runs,
 
 ### vs. Ensembl VEP
 
-| Metric | Ensembl VEP (Perl) | OxiVEP (Rust) |
+| Metric | Ensembl VEP (Perl) | fastVEP (Rust) |
 |--------|-------------------|---------------|
 | Full WGS (4M variants) | est. ~112 min | **64s** |
 | Peak memory (100K variants) | ~500 MB | **2.8 MB** |
@@ -391,4 +391,4 @@ Apache License 2.0
 
 ## Acknowledgements
 
-OxiVEP is inspired by [Ensembl VEP](https://www.ensembl.org/info/docs/tools/vep/index.html) by EMBL-EBI and [Illumina Nirvana](https://github.com/Illumina/Nirvana). The consequence prediction logic follows the Sequence Ontology term definitions and the Ensembl variant annotation framework.
+fastVEP is inspired by [Ensembl VEP](https://www.ensembl.org/info/docs/tools/vep/index.html) by EMBL-EBI and [Illumina Nirvana](https://github.com/Illumina/Nirvana). The consequence prediction logic follows the Sequence Ontology term definitions and the Ensembl variant annotation framework.

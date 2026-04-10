@@ -1,0 +1,10 @@
+[package]
+name = "fastvep-filter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Expression-based variant filter engine for fastVEP (filter_vep-compatible)"
+
+[dependencies]
+fastvep-core = { workspace = true }
+anyhow = { workspace = true }

@@ -1,4 +1,4 @@
-variants,oxivep_time_sec,oxivep_vps,dataset,source
+variants,fastvep_time_sec,fastvep_vps,dataset,source
 100000,26.61,3757,human_full_genome,GIAB_HG002
 500000,31.09,16081,human_full_genome,GIAB_HG002
 4048342,64.09,63165,human_full_genome,GIAB_HG002

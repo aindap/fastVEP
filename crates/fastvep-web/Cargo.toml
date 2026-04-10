@@ -1,0 +1,40 @@
+[package]
+name = "fastvep-web"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Production web server for fastVEP variant annotation"
+
+[[bin]]
+name = "fastvep-web"
+path = "src/main.rs"
+
+[dependencies]
+# Internal crates
+fastvep-core = { workspace = true }
+fastvep-genome = { workspace = true }
+fastvep-cache = { workspace = true }
+fastvep-consequence = { workspace = true }
+fastvep-hgvs = { workspace = true }
+fastvep-io = { workspace = true }
+fastvep-sa = { workspace = true }
+
+# Web framework
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
+tower = { version = "0.5", features = ["util", "limit"] }
+tower-http = { version = "0.6", features = ["cors", "limit", "trace"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# CLI
+clap = { workspace = true, features = ["env"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = { workspace = true }

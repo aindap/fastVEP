@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# OxiVEP validation suite — compares against Ensembl VEP Docker on real variant data.
+# fastVEP validation suite — compares against Ensembl VEP Docker on real variant data.
 #
 # Prerequisites:
-#   - oxivep binary in PATH (cargo install --path crates/oxivep-cli)
+#   - fastvep binary in PATH (cargo install --path crates/fastvep-cli)
 #   - Docker with ensemblorg/ensembl-vep:release_115.1
 #   - Full human genome data in test_data/organisms/human/
 #   - Mouse data in validation/mouse/ (auto-downloaded if missing)
@@ -25,9 +25,9 @@ mkdir -p "$RESULTS_DIR" "$VEP_CACHE"
 
 # ---- Helpers ----
 
-run_oxivep() {
+run_fastvep() {
     local input="$1" gff3="$2" fasta="$3" output="$4"
-    oxivep annotate -i "$input" --gff3 "$gff3" --fasta "$fasta" \
+    fastvep annotate -i "$input" --gff3 "$gff3" --fasta "$fasta" \
         --hgvs --symbol --canonical -o "$output" 2>&1
 }
 
@@ -71,8 +71,8 @@ run_human() {
     if [[ -f "$vep_example" ]]; then
         echo ""
         echo "--- VEP Example (173 chr22 variants, full genome annotations) ---"
-        echo "  Running OxiVEP..."
-        run_oxivep "$vep_example" "$human_gff3" "$human_fasta" "$RESULTS_DIR/oxivep_vep_example.vcf"
+        echo "  Running fastVEP..."
+        run_fastvep "$vep_example" "$human_gff3" "$human_fasta" "$RESULTS_DIR/fastvep_vep_example.vcf"
 
         echo "  Running Ensembl VEP (requires Docker)..."
         # VEP needs sorted+indexed GFF3; use the full GFF3 if indexed
@@ -85,8 +85,8 @@ run_human() {
     if [[ -f "$chr22_vcf" ]]; then
         echo ""
         echo "--- Human chr22 1KGP (1000 variants, full genome annotations) ---"
-        echo "  Running OxiVEP..."
-        run_oxivep "$chr22_vcf" "$human_gff3" "$human_fasta" "$RESULTS_DIR/oxivep_chr22.vcf"
+        echo "  Running fastVEP..."
+        run_fastvep "$chr22_vcf" "$human_gff3" "$human_fasta" "$RESULTS_DIR/fastvep_chr22.vcf"
     fi
 }
 
@@ -125,11 +125,11 @@ run_mouse() {
     echo ""
     echo "--- Mouse chr19 ---"
 
-    local oxivep_out="$RESULTS_DIR/oxivep_mouse_chr19.vcf"
+    local fastvep_out="$RESULTS_DIR/fastvep_mouse_chr19.vcf"
     local vep_out="$RESULTS_DIR/vep_mouse_chr19.vcf"
 
-    echo "  Running OxiVEP..."
-    run_oxivep "$input" "$gff3" "$fasta" "$oxivep_out"
+    echo "  Running fastVEP..."
+    run_fastvep "$input" "$gff3" "$fasta" "$fastvep_out"
 
     if [[ -f "$sorted_gff3" && -f "${sorted_gff3}.tbi" ]]; then
         echo "  Running Ensembl VEP..."
@@ -140,7 +140,7 @@ run_mouse() {
             "validation/results/vep_mouse_chr19.vcf"
 
         echo "  Comparing..."
-        compare "$oxivep_out" "$vep_out"
+        compare "$fastvep_out" "$vep_out"
     else
         echo "  WARN: no sorted+indexed GFF3 for mouse, skipping VEP comparison"
     fi

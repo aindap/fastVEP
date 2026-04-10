@@ -16,7 +16,7 @@ tests/
 
 # Benchmark data and output (scripts are tracked)
 benchmarks/output/
-benchmarks/*.oxivep.cache
+benchmarks/*.fastvep.cache
 
 # Auto-generated caches
-*.oxivep.cache
+*.fastvep.cache

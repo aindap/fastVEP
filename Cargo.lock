@@ -373,6 +373,141 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
+name = "fastvep-cache"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "fastvep-core",
+ "fastvep-genome",
+ "flate2",
+ "log",
+ "memmap2",
+ "noodles-bgzf",
+ "noodles-core",
+ "noodles-csi",
+ "noodles-tabix",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "fastvep-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "env_logger",
+ "fastvep-cache",
+ "fastvep-consequence",
+ "fastvep-core",
+ "fastvep-filter",
+ "fastvep-genome",
+ "fastvep-hgvs",
+ "fastvep-io",
+ "fastvep-sa",
+ "flate2",
+ "log",
+ "rayon",
+ "serde_json",
+]
+
+[[package]]
+name = "fastvep-consequence"
+version = "0.1.0"
+dependencies = [
+ "fastvep-core",
+ "fastvep-genome",
+ "log",
+]
+
+[[package]]
+name = "fastvep-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "fastvep-filter"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fastvep-core",
+]
+
+[[package]]
+name = "fastvep-genome"
+version = "0.1.0"
+dependencies = [
+ "fastvep-core",
+ "serde",
+]
+
+[[package]]
+name = "fastvep-hgvs"
+version = "0.1.0"
+dependencies = [
+ "fastvep-core",
+ "fastvep-genome",
+]
+
+[[package]]
+name = "fastvep-io"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fastvep-core",
+ "fastvep-genome",
+ "log",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fastvep-sa"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "fastvep-cache",
+ "fastvep-core",
+ "log",
+ "lru",
+ "memmap2",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "zip",
+ "zstd",
+]
+
+[[package]]
+name = "fastvep-web"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "clap",
+ "fastvep-cache",
+ "fastvep-consequence",
+ "fastvep-core",
+ "fastvep-genome",
+ "fastvep-hgvs",
+ "fastvep-io",
+ "fastvep-sa",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -797,141 +932,6 @@ name = "once_cell_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
-
-[[package]]
-name = "oxivep-cache"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bincode",
- "flate2",
- "log",
- "memmap2",
- "noodles-bgzf",
- "noodles-core",
- "noodles-csi",
- "noodles-tabix",
- "oxivep-core",
- "oxivep-genome",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "oxivep-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "env_logger",
- "flate2",
- "log",
- "oxivep-cache",
- "oxivep-consequence",
- "oxivep-core",
- "oxivep-filter",
- "oxivep-genome",
- "oxivep-hgvs",
- "oxivep-io",
- "oxivep-sa",
- "rayon",
- "serde_json",
-]
-
-[[package]]
-name = "oxivep-consequence"
-version = "0.1.0"
-dependencies = [
- "log",
- "oxivep-core",
- "oxivep-genome",
-]
-
-[[package]]
-name = "oxivep-core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "thiserror",
-]
-
-[[package]]
-name = "oxivep-filter"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "oxivep-core",
-]
-
-[[package]]
-name = "oxivep-genome"
-version = "0.1.0"
-dependencies = [
- "oxivep-core",
- "serde",
-]
-
-[[package]]
-name = "oxivep-hgvs"
-version = "0.1.0"
-dependencies = [
- "oxivep-core",
- "oxivep-genome",
-]
-
-[[package]]
-name = "oxivep-io"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "log",
- "oxivep-core",
- "oxivep-genome",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "oxivep-sa"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bincode",
- "log",
- "lru",
- "memmap2",
- "oxivep-cache",
- "oxivep-core",
- "serde",
- "serde_json",
- "tempfile",
- "zip",
- "zstd",
-]
-
-[[package]]
-name = "oxivep-web"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "clap",
- "oxivep-cache",
- "oxivep-consequence",
- "oxivep-core",
- "oxivep-genome",
- "oxivep-hgvs",
- "oxivep-io",
- "oxivep-sa",
- "serde",
- "serde_json",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "percent-encoding"

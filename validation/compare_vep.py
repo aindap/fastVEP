@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Compare OxiVEP and Ensembl VEP annotated VCF outputs.
+"""Compare fastVEP and Ensembl VEP annotated VCF outputs.
 
 Usage:
-    python compare_vep.py <oxivep.vcf> <vep.vcf> [--coding] [--verbose]
+    python compare_vep.py <fastvep.vcf> <vep.vcf> [--coding] [--verbose]
 
 Compares CSQ annotations field by field on shared (allele, transcript) pairs.
 Reports per-field accuracy, consequence type distribution, and example mismatches.
@@ -143,7 +143,7 @@ def compare(oxi, vep, coding_only=False, verbose=False):
     print(f"  Shared (allele, tx) pairs: {total_shared}")
     extra = sum(extra_oxi_bt.values())
     missing = sum(missing_oxi_bt.values())
-    print(f"  Extra transcripts (OxiVEP only):  {extra}")
+    print(f"  Extra transcripts (fastVEP only):  {extra}")
     print(f"  Missing transcripts (VEP only):   {missing}")
 
     print(f"\n--- FIELD-LEVEL ACCURACY ---")
@@ -168,7 +168,7 @@ def compare(oxi, vep, coding_only=False, verbose=False):
     if verbose:
         all_types = sorted(set(csq_types_oxi) | set(csq_types_vep))
         print(f"\n--- CONSEQUENCE TYPE DISTRIBUTION ---")
-        print(f"{'Type':<45} {'OxiVEP':>8} {'VEP':>8} {'Diff':>6}")
+        print(f"{'Type':<45} {'fastVEP':>8} {'VEP':>8} {'Diff':>6}")
         for t in all_types:
             o = csq_types_oxi.get(t, 0)
             v = csq_types_vep.get(t, 0)
@@ -189,8 +189,8 @@ def compare(oxi, vep, coding_only=False, verbose=False):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Compare OxiVEP vs Ensembl VEP outputs')
-    parser.add_argument('oxivep_vcf', help='OxiVEP annotated VCF')
+    parser = argparse.ArgumentParser(description='Compare fastVEP vs Ensembl VEP outputs')
+    parser.add_argument('fastvep_vcf', help='fastVEP annotated VCF')
     parser.add_argument('vep_vcf', help='Ensembl VEP annotated VCF')
     parser.add_argument('--coding', action='store_true',
                         help='Only compare coding/functional variant annotations')
@@ -198,7 +198,7 @@ def main():
                         help='Show consequence type distribution and biotype breakdown')
     args = parser.parse_args()
 
-    oxi = parse_vcf(args.oxivep_vcf)
+    oxi = parse_vcf(args.fastvep_vcf)
     vep = parse_vcf(args.vep_vcf)
     compare(oxi, vep, coding_only=args.coding, verbose=args.verbose)
 

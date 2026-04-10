@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OxiVEP - Variant Effect Predictor</title>
+  <title>fastVEP - Variant Effect Predictor</title>
   <style>
     :root {
       --bg: #0f1117;
@@ -542,7 +542,7 @@
     <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()">
       <span id="themeIcon">&#9790;</span> <span id="themeLabel">Light</span>
     </button>
-    <a href="https://github.com/kuanlinhuang/OxiVEP">GitHub</a>
+    <a href="https://github.com/kuanlinhuang/fastVEP">GitHub</a>
   </header>
 
   <div class="container">
@@ -696,12 +696,12 @@
   </div>
 
   <footer>
-    OxiVEP &mdash; High-performance variant effect prediction in Rust
+    fastVEP &mdash; High-performance variant effect prediction in Rust
   </footer>
 
 <script>
 // ============================================================
-// OxiVEP Client-Side Annotation Engine
+// fastVEP Client-Side Annotation Engine
 // ============================================================
 
 // Embedded example GFF3 gene model — real Ensembl data (GRCh38 release 115)
@@ -1504,7 +1504,7 @@ function renderRaw() {
   } else if (fmt === 'vcf') {
     const CSQ_FORMAT = 'Allele|Consequence|IMPACT|SYMBOL|Gene|Feature_type|Feature|BIOTYPE|EXON|INTRON|HGVSc|HGVSp|cDNA_position|CDS_position|Protein_position|Amino_acids|Codons|Existing_variation|REF_ALLELE|UPLOADED_ALLELE|DISTANCE|STRAND|FLAGS|CANONICAL|SYMBOL_SOURCE|HGNC_ID|MANE|MANE_SELECT|MANE_PLUS_CLINICAL|TSL|APPRIS|CCDS|ENSP|SOURCE|HGVS_OFFSET|SIFT|PolyPhen|AF|CLIN_SIG|SOMATIC|PHENO|PUBMED|MOTIF_NAME|MOTIF_POS|HIGH_INF_POS|MOTIF_SCORE_CHANGE|TRANSCRIPTION_FACTORS';
     text += '##fileformat=VCFv4.2\n';
-    text += `##INFO=<ID=CSQ,Number=.,Type=String,Description="Consequence annotations from OxiVEP. Format: ${CSQ_FORMAT}">\n`;
+    text += `##INFO=<ID=CSQ,Number=.,Type=String,Description="Consequence annotations from fastVEP. Format: ${CSQ_FORMAT}">\n`;
     text += '#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n';
     for (const r of allResults) {
       const esc = s => (s||'').replace(/,/g,'&').replace(/;/g,'%3B').replace(/=/g,'%3D').replace(/ /g,'_');
@@ -1632,7 +1632,7 @@ function dismissWarning() {
 
 // --- Theme toggle ---
 function getEffectiveTheme() {
-  const saved = localStorage.getItem('oxivep-theme');
+  const saved = localStorage.getItem('fastvep-theme');
   if (saved) return saved;
   // Follow system preference
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
@@ -1642,7 +1642,7 @@ function toggleTheme() {
   const current = getEffectiveTheme();
   const next = current === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
-  localStorage.setItem('oxivep-theme', next);
+  localStorage.setItem('fastvep-theme', next);
   updateThemeButton(next);
 }
 
@@ -1654,7 +1654,7 @@ function updateThemeButton(theme) {
 // Apply theme on load — respect system preference, override with saved choice
 (function() {
   const theme = getEffectiveTheme();
-  if (localStorage.getItem('oxivep-theme')) {
+  if (localStorage.getItem('fastvep-theme')) {
     document.documentElement.setAttribute('data-theme', theme);
   }
   // else: no data-theme attr → CSS @media prefers-color-scheme handles it

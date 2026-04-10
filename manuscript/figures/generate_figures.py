@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate manuscript figures for OxiVEP.
+Generate manuscript figures for fastVEP.
 Requires: matplotlib (pip install matplotlib)
 """
 
@@ -71,28 +71,28 @@ def fig1_architecture():
                     arrowprops=dict(arrowstyle='->', color='#6b7280', lw=1.5))
 
     # Title
-    ax.text(7, 8.6, 'OxiVEP Architecture', ha='center', va='center',
+    ax.text(7, 8.6, 'fastVEP Architecture', ha='center', va='center',
             fontsize=16, fontweight='bold', color='#1f2937')
     ax.text(7, 8.25, '9-crate Cargo workspace', ha='center', va='center',
             fontsize=10, color='#6b7280')
 
     # Layer 1: CLI (top)
-    box(2.5, 7.0, 9, 0.9, 'oxivep-cli', 'Pipeline, web server, cache builder, SA builder', COLORS['cli'], 13)
+    box(2.5, 7.0, 9, 0.9, 'fastvep-cli', 'Pipeline, web server, cache builder, SA builder', COLORS['cli'], 13)
 
     # Layer 2: Middle crates
-    box(0.3, 5.3, 2.6, 0.9, 'oxivep-io', 'VCF/CSQ/JSON I/O', COLORS['mid'])
-    box(3.2, 5.3, 2.6, 0.9, 'oxivep-hgvs', 'HGVSg/c/p', COLORS['mid'])
-    box(6.1, 5.3, 2.8, 0.9, 'oxivep-consequence', 'SNV/indel/SV engine', COLORS['mid'])
-    box(9.2, 5.3, 2.2, 0.9, 'oxivep-filter', 'Filter engine', COLORS['mid'])
-    box(11.7, 5.3, 2.0, 0.9, 'oxivep-sa', 'Annotations', COLORS['sa'])
+    box(0.3, 5.3, 2.6, 0.9, 'fastvep-io', 'VCF/CSQ/JSON I/O', COLORS['mid'])
+    box(3.2, 5.3, 2.6, 0.9, 'fastvep-hgvs', 'HGVSg/c/p', COLORS['mid'])
+    box(6.1, 5.3, 2.8, 0.9, 'fastvep-consequence', 'SNV/indel/SV engine', COLORS['mid'])
+    box(9.2, 5.3, 2.2, 0.9, 'fastvep-filter', 'Filter engine', COLORS['mid'])
+    box(11.7, 5.3, 2.0, 0.9, 'fastvep-sa', 'Annotations', COLORS['sa'])
 
     # Layer 3: Data layer
-    box(0.5, 3.5, 3.5, 0.9, 'oxivep-genome', 'Transcript, Exon, Gene, CodonTable', COLORS['data'])
-    box(4.5, 3.5, 5.0, 0.9, 'oxivep-cache', 'GFF3, FASTA mmap, tabix, binary cache', COLORS['data'])
-    box(10.0, 3.5, 3.5, 0.9, 'oxivep-sa (OxiSA)', 'ClinVar, gnomAD, REVEL, ...', COLORS['sa'])
+    box(0.5, 3.5, 3.5, 0.9, 'fastvep-genome', 'Transcript, Exon, Gene, CodonTable', COLORS['data'])
+    box(4.5, 3.5, 5.0, 0.9, 'fastvep-cache', 'GFF3, FASTA mmap, tabix, binary cache', COLORS['data'])
+    box(10.0, 3.5, 3.5, 0.9, 'fastvep-sa (fastSA)', 'ClinVar, gnomAD, REVEL, ...', COLORS['sa'])
 
     # Layer 4: Core (bottom)
-    box(3.0, 1.7, 8.0, 0.9, 'oxivep-core', 'GenomicPosition, Consequence (49 SO terms), Allele, Strand, Impact, VariantType', COLORS['core'], 12)
+    box(3.0, 1.7, 8.0, 0.9, 'fastvep-core', 'GenomicPosition, Consequence (49 SO terms), Allele, Strand, Impact, VariantType', COLORS['core'], 12)
 
     # Arrows: CLI -> middle layer
     for x in [1.6, 4.5, 7.5, 10.3, 12.7]:
@@ -122,11 +122,11 @@ def fig1_architecture():
 
 
 def fig2_throughput_scaling():
-    """Figure 2: OxiVEP throughput scaling on GIAB HG002 full-genome data."""
+    """Figure 2: fastVEP throughput scaling on GIAB HG002 full-genome data."""
     data = read_csv('scaling.csv')
     variants = [int(d['variants']) for d in data]
-    oxi_vps = [int(d['oxivep_vps']) for d in data]
-    oxi_time = [float(d['oxivep_time_sec']) for d in data]
+    oxi_vps = [int(d['fastvep_vps']) for d in data]
+    oxi_time = [float(d['fastvep_time_sec']) for d in data]
 
     if not HAS_MPL:
         print("Figure 2: Throughput Scaling")
@@ -191,7 +191,7 @@ def fig3_vep_concordance():
     ax.set_yticklabels(fields, fontsize=10, fontfamily='monospace')
     ax.invert_yaxis()
     ax.set_xlabel('Concordance with Ensembl VEP v115.1 (%)', fontsize=12)
-    ax.set_title('Field-Level Accuracy: OxiVEP vs Ensembl VEP\n(2,340 shared transcript-allele pairs, 173 variants)', fontsize=13, fontweight='bold')
+    ax.set_title('Field-Level Accuracy: fastVEP vs Ensembl VEP\n(2,340 shared transcript-allele pairs, 173 variants)', fontsize=13, fontweight='bold')
     ax.set_xlim(95, 101)
     ax.grid(True, alpha=0.3, axis='x')
     ax.axvline(x=100, color=COLORS['success'], linestyle='--', alpha=0.5, linewidth=1)
@@ -300,7 +300,7 @@ def fig5_resource_usage():
         ax1.text(i, t + 0.5, f'{t:.1f}s', ha='center', fontsize=10, fontweight='bold', color='#333')
 
     # Panel B: Binary size comparison
-    tools = ['Ensembl VEP\n(Perl + deps)', 'OxiVEP\n(static binary)']
+    tools = ['Ensembl VEP\n(Perl + deps)', 'fastVEP\n(static binary)']
     sizes = [200, mem_data.get('binary_size', 3.2)]
     bar_colors = [COLORS['vep'], COLORS['primary']]
     ax2.bar(range(len(tools)), sizes, color=bar_colors, alpha=0.85, width=0.5)
@@ -392,7 +392,7 @@ def fig6_organism_throughput():
 
 
 if __name__ == '__main__':
-    print("Generating OxiVEP manuscript figures...")
+    print("Generating fastVEP manuscript figures...")
     print(f"Data dir: {os.path.abspath(DATA_DIR)}")
     print(f"Output dir: {os.path.abspath(FIG_DIR)}")
     print()
