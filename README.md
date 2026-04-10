@@ -378,7 +378,7 @@ Benchmarked on Apple M-series (ARM64), release build with LTO. Median of 3 runs,
 |--------|-------------------|---------------|
 | Full WGS (4M variants) | est. ~112 min | **64s** |
 | Peak memory (100K variants) | ~500 MB | **2.8 MB** |
-| Binary size | ~200 MB installed | **2.3 MB** |
+| Binary size | ~200 MB installed | **3.2 MB** |
 | Dependencies | Perl 5.22+, DBI, 10+ CPAN modules | **None** |
 
 ## License

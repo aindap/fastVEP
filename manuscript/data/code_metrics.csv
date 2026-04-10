@@ -6,10 +6,11 @@ loc_oxivep-consequence,2058
 loc_oxivep-hgvs,968
 loc_oxivep-io,1462
 loc_oxivep-filter,720
-loc_oxivep-cli,2323
+loc_oxivep-cli,2331
 loc_oxivep-sa,5035
-total_source_lines,16885
-tests_total,233
+loc_oxivep-web,1073
+total_source_lines,17966
+tests_total,173
 so_consequence_types,49
-web_gui_lines,1753
-csq_output_fields,47
+web_gui_lines,1872
+csq_output_fields,48

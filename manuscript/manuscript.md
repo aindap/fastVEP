@@ -197,7 +197,7 @@ Rust was chosen for OxiVEP based on several properties relevant to bioinformatic
 
 1. **Zero-cost abstractions**: Trait-based polymorphism compiles to direct function calls with no runtime dispatch overhead.
 2. **Memory safety without garbage collection**: Rust's ownership system eliminates entire classes of bugs (use-after-free, data races, null pointer dereferences) while avoiding the unpredictable pause times of garbage-collected languages.
-3. **Static binary compilation**: OxiVEP compiles to a single 2.3 MB binary with no runtime dependencies, simplifying deployment in HPC environments, Docker containers, and clinical pipelines.
+3. **Static binary compilation**: OxiVEP compiles to a single 3.2 MB binary with no runtime dependencies, simplifying deployment in HPC environments, Docker containers, and clinical pipelines.
 4. **Ecosystem maturity**: The Rust bioinformatics ecosystem includes production-quality crates for genomic file formats (noodles, rust-htslib), interval trees (coitrees), and parallelism (rayon).
 
 ---
@@ -277,24 +277,25 @@ All 23 compared annotation fields achieved 100% concordance. OxiVEP annotated 35
 
 | Metric | Ensembl VEP (Perl) | OxiVEP (Rust) | Improvement |
 |--------|-------------------|---------------|-------------|
-| Binary/install size | ~200 MB (with dependencies) | 2.3 MB | 87x smaller |
-| Startup time (binary cache) | 5-15 sec | 0.62 sec | 8-24x faster |
+| Binary/install size | ~200 MB (with dependencies) | 3.2 MB | 63x smaller |
+| Startup (7K transcripts, yeast) | 5-15 sec | 1.4 sec | 4-11x faster |
+| Startup (509K transcripts, human) | N/A (cannot load) | 26.6 sec | -- |
 | External dependencies | Perl 5.22+, DBI, 10+ CPAN modules | None | -- |
 | Installation | INSTALL.pl + compile C extensions | `cargo build --release` | -- |
 
-OxiVEP's binary transcript cache enables rapid startup (0.62 seconds for 11,605 transcripts on chr22), compared to the 5-15 seconds typically required for Ensembl VEP's Perl module loading and cache initialization. The release binary is compiled with LTO (link-time optimization) and single codegen unit for maximum performance, resulting in a 2.3 MB statically-linked binary. Variants are processed in a streaming fashion without buffering the entire input in memory, and memory-mapped FASTA access avoids loading the full reference genome.
+OxiVEP's binary transcript cache enables rapid startup that scales with genome complexity: 1.4 seconds for yeast (7K transcripts), 2.6 seconds for Drosophila (35K), 10.4 seconds for mouse (143K), and 26.6 seconds for the full human genome (509K transcripts). The release binary is compiled with LTO (link-time optimization) and single codegen unit for maximum performance, resulting in a 3.2 MB statically-linked binary. Variants are processed in a streaming fashion without buffering the entire input in memory, and memory-mapped FASTA access avoids loading the full reference genome.
 
 ### 3.4 Output Format Performance
 
-**Table 5. Output format comparison for 10,000 real Ensembl chr22 variants.**
+**Table 5. Output format comparison for 10,000 GIAB HG002 variants against full GRCh38 (508,530 transcripts).**
 
 | Format | Time (sec) | Output size |
 |--------|-----------|-------------|
-| VCF (CSQ, 47 fields) | 0.649 | 2,236 KB |
-| Tab-delimited | 0.646 | 1,463 KB |
-| JSON | 0.682 | 6,228 KB |
+| VCF (CSQ, 48 fields) | 24.77 | 30,825 KB |
+| Tab-delimited | 24.83 | 14,849 KB |
+| JSON | 25.02 | 45,372 KB |
 
-All three output formats perform similarly, with annotation time dominating over formatting overhead. JSON output produces substantially larger files (~4.3x larger than tab) due to the verbose structured format, but provides richer programmatic access to nested consequence data.
+All three output formats perform similarly when startup dominates (loading 508K transcripts takes ~24.8 seconds). The per-variant formatting overhead is negligible. JSON output produces substantially larger files (~3x larger than tab) due to the verbose structured format, but provides richer programmatic access to nested consequence data.
 
 ### 3.5 Cross-Organism Annotation
 
@@ -526,7 +527,7 @@ Zook, J. M., McDaniel, J., Olson, N. D., Wagner, J., Parikh, H., Heaton, H., ...
 
 **Figure 4. Consequence distribution.** Bar chart showing the distribution of 28,161 predicted consequences from 1,000 real 1KGP variants annotated against full Ensembl GRCh38 chromosome 22 gene models (11,605 transcripts). The distribution covers 16 SO consequence types, with intronic (41.1%) and non-coding transcript (37.8%) variants predominating.
 
-**Figure 5. Resource usage comparison.** (A) Wall-clock time comparison between OxiVEP and Ensembl VEP v115.1 across variant counts from 1,000 to 500,000, showing OxiVEP's sub-second performance at up to 100,000 variants. (B) Binary size comparison: OxiVEP's 2.3 MB static binary vs. Ensembl VEP's ~200 MB installation footprint. (C) Startup time: OxiVEP binary cache loads 11,605 transcripts in 0.22 seconds.
+**Figure 5. Resource usage comparison.** (A) Wall-clock time comparison between OxiVEP and Ensembl VEP v115.1 across variant counts from 1,000 to 500,000, showing OxiVEP's sub-second performance at up to 100,000 variants. (B) Binary size comparison: OxiVEP's 3.2 MB static binary vs. Ensembl VEP's ~200 MB installation footprint. (C) Startup time scaling: 1.4s for yeast (7K transcripts) to 26.6s for full human genome (509K transcripts).
 
 ---
 

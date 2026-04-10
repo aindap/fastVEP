@@ -1,4 +1,4 @@
-format,variants,time_sec,output_size_bytes
-vcf,10000,0.649,2235593
-tab,10000,0.646,1462547
-json,10000,0.682,6227511
+format,variants,transcripts,time_sec,output_size_bytes
+vcf,10000,508530,24.77,32365184
+tab,10000,508530,24.83,15205428
+json,10000,508530,25.02,47658250

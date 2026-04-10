@@ -1,7 +1,7 @@
 metric,value,unit
-binary_size,2.3,MB
-startup_time_cached,620,ms
-startup_time_gff3_chr22,870,ms
-peak_memory_1000v,2.3,MB
-peak_memory_10000v,2.5,MB
-peak_memory_100000v,2.8,MB
+binary_size,3.2,MB
+startup_time_yeast_7k,1.42,sec
+startup_time_drosophila_35k,2.63,sec
+startup_time_arabidopsis_54k,3.60,sec
+startup_time_mouse_143k,10.40,sec
+startup_time_human_509k,26.61,sec
