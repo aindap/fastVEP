@@ -10,7 +10,7 @@ loc_fastvep-cli,2331
 loc_fastvep-sa,5035
 loc_fastvep-web,1073
 total_source_lines,17966
-tests_total,173
+tests_total,175
 so_consequence_types,49
 web_gui_lines,1872
 csq_output_fields,48
