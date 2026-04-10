@@ -248,13 +248,14 @@ pub async fn upload_gff3(
 // --- helpers ---
 
 fn find_file_with_ext(dir: &std::path::Path, extensions: &[&str]) -> Option<PathBuf> {
-    let entries = std::fs::read_dir(dir).ok()?;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_file() {
-            let fname = path.file_name()?.to_string_lossy();
-            for ext in extensions {
-                if fname.ends_with(ext) {
+    // Search in order of extension priority (first ext = highest priority)
+    for ext in extensions {
+        let entries = std::fs::read_dir(dir).ok()?;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                let fname = path.file_name()?.to_string_lossy();
+                if fname.ends_with(ext) && !fname.ends_with(&format!(".fastvep.cache.{}", ext)) {
                     return Some(path);
                 }
             }

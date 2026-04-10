@@ -76,7 +76,14 @@ pub fn default_cache_path(gff3_path: &Path) -> std::path::PathBuf {
     let mut cache_path = gff3_path.to_path_buf();
     let name = cache_path
         .file_name()
-        .map(|n| format!("{}.fastvep.cache", n.to_string_lossy()))
+        .map(|n| {
+            let s = n.to_string_lossy();
+            if s.ends_with(".fastvep.cache") {
+                s.to_string()
+            } else {
+                format!("{}.fastvep.cache", s)
+            }
+        })
         .unwrap_or_else(|| "transcripts.fastvep.cache".to_string());
     cache_path.set_file_name(name);
     cache_path
