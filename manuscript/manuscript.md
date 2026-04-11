@@ -206,7 +206,7 @@ Rust was chosen for fastVEP based on several properties relevant to bioinformati
 
 ### 3.1 Throughput Performance
 
-We benchmarked fastVEP's annotation throughput using the GIAB HG002 v4.2.1 benchmark VCF (4,048,342 high-confidence variants) annotated against the full Ensembl GRCh38 release 115 GFF3 annotations (508,530 transcripts) with FASTA reference and HGVS generation enabled (Table 2, Figures 2-3). fastVEP used its binary transcript cache. Ensembl VEP v115.1 was run via Docker for head-to-head comparison (Figure 3).
+We benchmarked fastVEP's annotation throughput using the GIAB HG002 v4.2.1 benchmark VCF (4,048,342 high-confidence variants) annotated against the full Ensembl GRCh38 release 115 GFF3 annotations (508,530 transcripts) with FASTA reference and HGVS generation enabled (Table 2, Figure 2). fastVEP used its binary transcript cache. Ensembl VEP v115.1 was run via Docker for head-to-head comparison (Figure 2).
 
 **Table 2. fastVEP throughput scaling on GIAB HG002 (GRCh38).** All measurements on Apple M-series ARM64 using GIAB HG002 v4.2.1 high-confidence variants against full Ensembl GRCh38 release 115 annotations (508,530 transcripts), with FASTA reference and HGVS generation. fastVEP used binary transcript cache. Median of 3 runs.
 
@@ -217,7 +217,7 @@ We benchmarked fastVEP's annotation throughput using the GIAB HG002 v4.2.1 bench
 | 10,000 | 0.671s | 14,903 | 30.31s | 330 | 45.2x |
 | 50,000 | 1.585s | 31,546 | 206.13s | 243 | 130.1x |
 
-At 1,000 variants, fastVEP is 2.6x faster (0.40s vs 1.06s). As variant counts increase, the performance gap widens dramatically: at 5,000 variants fastVEP is 29x faster, at 10,000 variants 45x faster, and at 50,000 variants **130x faster** (1.6 seconds vs 206 seconds). VEP's throughput degrades from 943 v/s at 1K variants to 243 v/s at 50K variants, while fastVEP's throughput *increases* from 2,500 v/s to 31,546 v/s — reflecting efficient amortization of startup costs through batch parallel annotation. At genome scale (4.05M variants, 508K transcripts), fastVEP completes in 86 seconds; VEP cannot load the full-genome GFF3 at all (Figure 3).
+At 1,000 variants, fastVEP is 2.6x faster (0.40s vs 1.06s). As variant counts increase, the performance gap widens dramatically: at 5,000 variants fastVEP is 29x faster, at 10,000 variants 45x faster, and at 50,000 variants **130x faster** (1.6 seconds vs 206 seconds). VEP's throughput degrades from 943 v/s at 1K variants to 243 v/s at 50K variants, while fastVEP's throughput *increases* from 2,500 v/s to 31,546 v/s — reflecting efficient amortization of startup costs through batch parallel annotation. At genome scale (4.05M variants, 508K transcripts), fastVEP completes in 86 seconds; VEP cannot load the full-genome GFF3 at all (Figure 2A).
 
 ### 3.2 Clinical WGS Benchmark: GIAB NA12878
 
@@ -237,7 +237,7 @@ These results demonstrate that fastVEP can annotate a complete clinical WGS in u
 
 ### 3.3 Annotation Accuracy Against Ensembl VEP
 
-fastVEP's annotation accuracy was validated by field-level comparison against Ensembl VEP release 115.1 on 173 real human chromosome 22 variants from the VEP example dataset (Table 3, Figure 4). Both tools were run with the same GFF3 annotations and FASTA reference (GRCh38) using equivalent flags (`--hgvs --symbol --canonical`).
+fastVEP's annotation accuracy was validated by field-level comparison against Ensembl VEP release 115.1 on 173 real human chromosome 22 variants from the VEP example dataset (Table 3, Figure 3). Both tools were run with the same GFF3 annotations and FASTA reference (GRCh38) using equivalent flags (`--hgvs --symbol --canonical`).
 
 **Table 3. Field-level concordance between fastVEP and Ensembl VEP v115.1.** Comparison on 2,340 shared (allele, transcript) pairs from 173 VEP example variants on chromosome 22.
 
@@ -315,7 +315,7 @@ fastVEP annotates complete gold-standard variant datasets across all five organi
 
 ### 3.6 Consequence Prediction on Real Variants
 
-fastVEP was applied to 1,000 variants from the 1000 Genomes Project on chromosome 22, annotated against the full Ensembl GRCh38 gene models (11,605 transcripts). The annotation produced 28,161 consequence calls across 16 distinct SO terms (Table 7, Figure 5).
+fastVEP was applied to the complete GIAB HG002 WGS (4,048,342 variants) annotated against the full Ensembl GRCh38 gene model (508,530 transcripts). The annotation produced 50.1 million consequence calls across 25 distinct SO terms (Table 7, Figure 4).
 
 **Table 7. Consequence distribution from 1,000 real 1KGP chromosome 22 variants.**
 
@@ -519,15 +519,13 @@ Zook, J. M., McDaniel, J., Olson, N. D., Wagner, J., Parikh, H., Heaton, H., ...
 
 **Figure 1. fastVEP architecture.** The nine-crate workspace showing data flow from VCF input through consequence prediction to output formatting. Arrows indicate crate dependencies. The `fastvep-consequence` crate (consequence prediction engine) is the computational core, consuming transcript models from `fastvep-cache` and variant representations from `fastvep-io`. The `fastvep-sa` crate provides supplementary annotation support with direct database integration (ClinVar, gnomAD, dbSNP, COSMIC, prediction scores, gene-level annotations).
 
-**Figure 2. Multi-organism benchmark on complete gold-standard datasets.** (A) Wall-clock annotation time vs variant count for five model organisms using full Ensembl gene models with FASTA and HGVS. Bubble size reflects genome complexity (7K–509K transcripts). (B) Peak throughput by organism, demonstrating 47K–86K variants/second across a 72x range of genome complexity.
+**Figure 2. fastVEP vs Ensembl VEP: performance comparison.** (A) Wall-clock annotation time showing head-to-head VEP comparison (connected lines, 1K–50K GIAB HG002 chr22 variants) and fastVEP multi-organism results (diamonds: yeast 260K, Drosophila 4.4M, Arabidopsis 12.9M, mouse 26M, human 4M). VEP's dashed extrapolation shows it cannot complete full-genome annotation (~4.6 hours estimated). (B) Speedup bars (2.6x–130x) with VEP throughput degradation overlay (943→243 v/s).
 
-**Figure 3. fastVEP vs Ensembl VEP v115.1 head-to-head comparison.** (A) Wall-clock time on GIAB HG002 chr22 variants (1K–50K) with identical Ensembl GRCh38 GFF3+FASTA annotations. fastVEP completes the full 4.05M-variant WGS in 86 seconds (star); VEP cannot load the full-genome GFF3 (dashed extrapolation). (B) Throughput divergence: fastVEP scales from 2.5K to 32K v/s while VEP degrades from 943 to 243 v/s. Speedup: 2.6x at 1K, 29x at 5K, 45x at 10K, **130x at 50K variants**.
+**Figure 3. VEP concordance.** Field-level accuracy: fastVEP vs Ensembl VEP v115.1 on 2,340 shared transcript-allele pairs from 173 variants on chromosome 22. All 23 compared annotation fields achieve 100% concordance.
 
-**Figure 4. VEP concordance.** Field-level accuracy comparison between fastVEP and Ensembl VEP v115.1 on 2,340 shared transcript-allele pairs from 173 VEP example variants on chromosome 22. All 23 compared annotation fields achieve 100% concordance.
+**Figure 4. Consequence distribution.** Distribution of 50.1 million predicted consequences from the complete GIAB HG002 WGS (4,048,342 variants) annotated against the full Ensembl GRCh38 gene model (508,530 transcripts). The distribution covers 25 SO consequence types, with intronic (57.4%) and non-coding transcript (22.5%) variants predominating.
 
-**Figure 5. Consequence distribution.** Bar chart showing the distribution of 28,161 predicted consequences from 1,000 real 1KGP variants annotated against full Ensembl GRCh38 chromosome 22 gene models (11,605 transcripts). The distribution covers 16 SO consequence types, with intronic (41.1%) and non-coding transcript (37.8%) variants predominating.
-
-**Figure 6. Throughput consistency across genome complexity.** (A) Annotation throughput (variants/second) vs gene model complexity (transcript count), showing fastVEP maintains 47K–86K v/s throughput across a 72x range from yeast (7K transcripts) to human (509K transcripts). Shaded band indicates the consistent throughput range. (B) Scale of gold-standard benchmark datasets: from 260K yeast variants to 12.9M Arabidopsis 1001 Genomes variants.
+**Figure 5. Multi-organism throughput.** Annotation throughput (variants/second) for five organisms using complete gold-standard VCFs with full Ensembl genome annotations. Throughput ranges from 47K v/s (human, 509K transcripts) to 86K v/s (yeast, 7K transcripts), demonstrating consistent performance across a 72x range of genome complexity.
 
 ---
 
