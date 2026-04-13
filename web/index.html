@@ -555,7 +555,7 @@
 </head>
 <body>
   <header>
-    <h1><span>Oxi</span>VEP</h1>
+    <h1><span>fast</span>VEP</h1>
     <span class="badge">v0.1.0</span>
     <span class="spacer"></span>
     <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()">
@@ -1269,6 +1269,14 @@ function formatGenomeLabel(name) {
   else if (lower.includes('wbcel') || lower.includes('elegans')) species = 'C. elegans WBcel235';
   else if (lower.includes('r64') || lower.includes('cerevisiae') || lower.includes('yeast')) species = 'Yeast R64-1-1';
   else if (lower.includes('tair') || lower.includes('arabidopsis')) species = 'Arabidopsis TAIR10';
+  // Bare species names (fallback for dirs without build info)
+  else if (lower === 'human') species = 'Human';
+  else if (lower === 'mouse') species = 'Mouse';
+  else if (lower === 'yeast') species = 'Yeast';
+  else if (lower === 'drosophila') species = 'Fruit fly';
+  else if (lower === 'elegans') species = 'C. elegans';
+  else if (lower === 'zebrafish') species = 'Zebrafish';
+  else if (lower === 'arabidopsis') species = 'Arabidopsis';
   // Source detection
   let source = null;
   if (lower.includes('ensembl')) {
