@@ -12,6 +12,45 @@ Complete guide to hosting fastVEP as a public web service with full human genome
 
 Upgrade to CCX33 (8 vCPU, 32GB RAM, 160GB SSD, ~$55/month) if you want headroom for multiple genomes or heavy traffic.
 
+## Deployment Tiers
+
+fastVEP ships with ready-to-run deployment scripts in `scripts/`. Pick the one that fits your server and use case.
+
+| Tier | Script | Disk Used | Server | Cost | What You Get |
+|:-----|:-------|:----------|:-------|:-----|:-------------|
+| **Minimal** | `scripts/deploy-minimal.sh` | ~10 GB | CCX23 (80GB) | ~$30/mo | Human GRCh38 + ClinVar |
+| **Clinical** | `scripts/deploy-clinical.sh` | ~20 GB | CCX23 (80GB) | ~$30/mo | GRCh38 + ClinVar + dbSNP + Mouse/Zebrafish/Drosophila |
+| **Full Research** | `scripts/deploy-full.sh` | ~55 GB | CCX33 (160GB) | ~$55/mo | GRCh38 + GRCh37 + ClinVar + dbSNP + gnomAD v4 + 5 model organisms |
+
+### Quick deploy with scripts
+
+After building the binaries (Section 2), run one of:
+
+```bash
+# Set the path to your compiled binaries
+export FASTVEP_BIN=/root/fastVEP/target/release
+
+# Option 1: Minimal (takes ~15 min)
+bash scripts/deploy-minimal.sh
+
+# Option 2: Clinical (takes ~1 hour)
+bash scripts/deploy-clinical.sh
+
+# Option 3: Full Research (takes ~6-12 hours — gnomAD is huge)
+bash scripts/deploy-full.sh
+```
+
+The scripts are **idempotent** — you can re-run them safely if interrupted. They skip files that already exist.
+
+> **Which tier should I pick?**
+> - **Minimal**: You just want fast variant consequence prediction + ClinVar lookups. Fits easily on an 80GB server.
+> - **Clinical**: You need dbSNP rs IDs and model organism support for a lab running human + common model organism experiments.
+> - **Full Research**: You need population frequency filtering (gnomAD) and legacy GRCh37 support. Requires a larger server (160GB SSD) or a Hetzner Volume.
+
+You can always start with Minimal and upgrade later — the scripts build on each other.
+
+> **Disk space warning**: gnomAD raw VCFs are 7-25 GB **per chromosome**. The Full Research script downloads one chromosome at a time, builds the index, then deletes the VCF to avoid filling the disk. You need ~40 GB of *temporary* free space during the gnomAD build.
+
 ## 1. Provision the Server
 
 ### Create account and server
@@ -26,10 +65,23 @@ Upgrade to CCX33 (8 vCPU, 32GB RAM, 160GB SSD, ~$55/month) if you want headroom 
    - **SSH key**: select yours
    - **Name**: `fastvep`
 
+### Domain Setup (Hostinger)
+
+To connect your domain from Hostinger to this server:
+
+1. Log in to your **Hostinger Control Panel**.
+2. Go to **Domains** → Select your domain → **DNS / Nameservers**.
+3. Add or edit an **A Record**:
+   - **Type**: `A`
+   - **Name**: `@` (for the root domain) or `fastvep` (for a subdomain like `fastvep.yourdomain.com`).
+   - **Points to**: `87.99.149.71` (Your server IP).
+   - **TTL**: Default (usually 14400 or 3600).
+4. Save the record. Propagation may take up to 24 hours but is usually faster.
+
 ### Initial setup
 
 ```bash
-ssh root@YOUR_SERVER_IP
+ssh -i ~/.ssh/fastvep_key root@87.99.149.71
 
 # System updates
 apt update && apt upgrade -y
@@ -48,23 +100,74 @@ ufw allow 'Nginx Full'
 ufw enable
 ```
 
-## 2. Build and Upload the Binary
+## 2. Prepare and Build the Binary
 
-On your development machine:
+On your development machine, you'll need the source code and Rust installed.
+
+### Which build method should I use?
+
+| Method | Pros | Cons |
+|:---|:---|:---|
+| **Build on Server** | **Simplest.** No local setup. Guaranteed compatibility. | Uses server CPU/RAM (may slow down site during build). |
+| **Cross-compile** | Faster (uses your Mac/PC). No extra tools on server. | Requires Docker/Colima locally. More complex to set up. |
+
+**Recommendation**: If it's your first time, **Build on the server directly**. It's much harder to mess up.
+
+### Clone the repository
+```bash
+git clone https://github.com/Huang-lab/fastVEP.git
+cd fastVEP
+```
+
+### Build the binary
+If building on a Mac/Windows for a Linux server (cross-compiling):
 
 ```bash
-# Cross-compile for Linux (if building on Mac)
-# Option A: Use cross (recommended)
-cargo install cross
-cross build --release --target x86_64-unknown-linux-gnu -p fastvep-web
+# 1. Install Rust (if not already installed)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env
 
-# Option B: Build on the server directly
-# (requires Rust on server: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh)
+# 2. Install build dependencies (required for compiling Rust tools)
+# On Ubuntu/Debian:
+sudo apt update && sudo apt install -y build-essential pkg-config libssl-dev
+# On Mac:
+# xcode-select --install
+
+# 3. Install cross for cross-compilation
+cargo install cross --git https://github.com/cross-rs/cross
+
+# 4. Build for Linux (requires Docker or Colima)
+# Note: If building on the server, you must install Docker:
+# sudo apt install -y docker.io && sudo usermod -aG docker $USER && newgrp docker
+cross build --release --target x86_64-unknown-linux-gnu -p fastvep-web
 
 # Upload binary
 scp target/x86_64-unknown-linux-gnu/release/fastvep-web root@YOUR_SERVER_IP:/opt/fastvep/bin/
 ssh root@YOUR_SERVER_IP 'chmod +x /opt/fastvep/bin/fastvep-web'
 ```
+
+**Alternative: Build on the server directly**
+This is often easier if you don't want to set up Docker/cross locally.
+```bash
+ssh root@YOUR_SERVER_IP
+# Install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env
+
+# Install build dependencies
+apt update && apt install -y build-essential pkg-config libssl-dev
+
+# Clone and build
+git clone https://github.com/Huang-lab/fastVEP.git
+cd fastVEP
+cargo build --release
+mkdir -p /opt/fastvep/bin
+cp target/release/fastvep-web /opt/fastvep/bin/fastvep-web
+cp target/release/fastvep     /opt/fastvep/bin/fastvep
+chmod +x /opt/fastvep/bin/fastvep-web /opt/fastvep/bin/fastvep
+```
+
+> **Note**: `cargo build --release` (without `-p`) builds both the `fastvep-web` server and the `fastvep` CLI. The CLI is needed to build SA databases (ClinVar, gnomAD, dbSNP, etc.).
 
 ## 3. Download Genome Data
 
@@ -102,11 +205,12 @@ mkdir -p /opt/fastvep/data
 cd /opt/fastvep/data
 ```
 
-Also upload the `fastvep` CLI binary (needed to build SA databases):
+If you built on the server (recommended), both `fastvep` and `fastvep-web` are already in `/opt/fastvep/bin/`. If you cross-compiled, also upload the CLI binary:
 
 ```bash
-# From dev machine
+# Only needed if you cross-compiled — skip if you built on the server
 scp target/x86_64-unknown-linux-gnu/release/fastvep root@YOUR_SERVER_IP:/opt/fastvep/bin/
+chmod +x /opt/fastvep/bin/fastvep
 ```
 
 Install `samtools` for FASTA indexing:
@@ -286,12 +390,17 @@ wget https://ftp.ncbi.nih.gov/snp/latest_release/VCF/GCF_000001405.40.gz
 /opt/fastvep/bin/fastvep sa-build --source dbsnp \
   -i GCF_000001405.40.gz -o dbsnp --assembly GRCh38
 
-# gnomAD v4 genomes (~25GB per chromosome, ~30GB .osa total)
-for chr in {1..22} X Y; do
-  wget "https://storage.googleapis.com/gcp-public-data--gnomad/release/4.1/vcf/genomes/gnomad.genomes.v4.1.sites.chr${chr}.vcf.bgz"
+# gnomAD v4 genomes (~7-25GB per chromosome VCF, ~30GB .osa total)
+# IMPORTANT: Download ONE chromosome at a time, index it, then delete the VCF.
+# This avoids needing hundreds of GB of temp space.
+for chr in {1..22} X; do
+  VCF="gnomad.genomes.v4.1.sites.chr${chr}.vcf.bgz"
+  wget "https://storage.googleapis.com/gcp-public-data--gnomad/release/4.1/vcf/genomes/${VCF}"
+  /opt/fastvep/bin/fastvep sa-build --source gnomad \
+    -i "$VCF" -o gnomad --assembly GRCh38
+  rm -f "$VCF"   # delete raw VCF to free disk space
+  echo "chr${chr} done. Disk free: $(df -h --output=avail /opt/fastvep/data | tail -1 | xargs)"
 done
-/opt/fastvep/bin/fastvep sa-build --source gnomad \
-  -i gnomad.genomes.v4.1.sites.chr1.vcf.bgz -o gnomad --assembly GRCh38
 
 # 1000 Genomes (~10GB download)
 wget https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/working/20220422_3202_phased_SNV_INDEL_SV/1kGP_high_coverage_Illumina.chr1.filtered.SNV_INDEL_SV_phased_panel.vcf.gz
@@ -332,11 +441,15 @@ wget https://ftp.ncbi.nih.gov/snp/pre_build152/organisms/human_9606_b151_GRCh37p
   -i 00-All.vcf.gz -o dbsnp --assembly GRCh37
 
 # gnomAD v2.1.1 for GRCh37 (v3+ is GRCh38 only)
-for chr in {1..22} X Y; do
-  wget "https://storage.googleapis.com/gcp-public-data--gnomad/release/2.1.1/vcf/genomes/gnomad.genomes.r2.1.1.sites.${chr}.vcf.bgz"
+# Same pattern: one chr at a time, index, delete.
+# Note: gnomAD v2.1.1 does NOT have a Y chromosome file — that's expected.
+for chr in {1..22} X; do
+  VCF="gnomad.genomes.r2.1.1.sites.${chr}.vcf.bgz"
+  wget "https://storage.googleapis.com/gcp-public-data--gnomad/release/2.1.1/vcf/genomes/${VCF}"
+  /opt/fastvep/bin/fastvep sa-build --source gnomad \
+    -i "$VCF" -o gnomad --assembly GRCh37
+  rm -f "$VCF"
 done
-/opt/fastvep/bin/fastvep sa-build --source gnomad \
-  -i gnomad.genomes.r2.1.1.sites.1.vcf.bgz -o gnomad --assembly GRCh37
 
 # (SpliceAI has separate hg19 and hg38 distributions)
 # Manual download: spliceai_scores.raw.snv.hg19.vcf.gz
@@ -497,7 +610,7 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 ```
 
-### TLS with Let's Encrypt (or Cloudflare)
+### TLS with Let's Encrypt, Cloudflare, or Hostinger
 
 **Option A: Let's Encrypt (free, auto-renewing)**
 
@@ -506,7 +619,21 @@ certbot --nginx -d your-domain.com
 # Follow prompts; auto-renews via systemd timer
 ```
 
-**Option B: Cloudflare (recommended — free DDoS protection + CDN)**
+**Option B: Hostinger (Direct DNS)**
+
+If you bought your domain on Hostinger and want to point it directly to your Hetzner server without Cloudflare:
+
+1. Log in to your **Hostinger Control Panel (hPanel)**.
+2. Go to **Domains** and select your domain.
+3. Click on **DNS / Nameservers** in the left sidebar.
+4. Add or edit an **A Record**:
+   - **Type**: `A`
+   - **Name**: `@` (for the main domain) or `vep` (for a subdomain)
+   - **Points to**: `YOUR_SERVER_IP` (your Hetzner server's public IP)
+   - **TTL**: default (usually 14400)
+5. Wait for propagation (usually 15-30 mins) and then run the **Let's Encrypt** setup (Option A) on your server.
+
+**Option C: Cloudflare (recommended — free DDoS protection + CDN)**
 
 1. **Sign up** at [cloudflare.com](https://www.cloudflare.com/) (free plan)
 2. **Add your domain**: Enter your domain, Cloudflare scans existing DNS records
