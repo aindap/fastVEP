@@ -24,28 +24,46 @@ fastVEP ships with ready-to-run deployment scripts in `scripts/`. Pick the one t
 
 ### Quick deploy with scripts
 
-After building the binaries (Section 2), run one of:
+After building the binaries (Section 2), run the deployment script **on the server**:
 
 ```bash
-# Set the path to your compiled binaries
+# 1. SSH into the server
+ssh -i ~/.ssh/fastvep_key root@Your.server.IP
+
+# 2. Make sure the repo is up-to-date (scripts are in the repo)
+cd /root/fastVEP
+git pull
+
+# 3. Rebuild both binaries (CLI + web server)
+cargo build --release
+
+# 4. Copy binaries to /opt/fastvep/bin
+mkdir -p /opt/fastvep/bin
+cp target/release/fastvep-web /opt/fastvep/bin/fastvep-web
+cp target/release/fastvep     /opt/fastvep/bin/fastvep
+chmod +x /opt/fastvep/bin/fastvep-web /opt/fastvep/bin/fastvep
+
+# 5. Run the deployment script (pick one)
 export FASTVEP_BIN=/root/fastVEP/target/release
+bash scripts/deploy-full.sh        # ← recommended for CCX33 (150GB)
+# OR: bash scripts/deploy-clinical.sh   # for CCX23 (80GB)
+# OR: bash scripts/deploy-minimal.sh    # quickest, just hg38 + ClinVar
+```
 
-# Option 1: Minimal (takes ~15 min)
-bash scripts/deploy-minimal.sh
+**Alternatively**, if you built locally (Mac) and want to upload the scripts to the server:
 
-# Option 2: Clinical (takes ~1 hour)
-bash scripts/deploy-clinical.sh
-
-# Option 3: Full Research (takes ~6-12 hours — gnomAD is huge)
-bash scripts/deploy-full.sh
+```bash
+# From your local machine
+scp scripts/deploy-full.sh root@Your.server.IP:/root/fastVEP/scripts/
+ssh -i ~/.ssh/fastvep_key root@Your.server.IP 'cd /root/fastVEP && bash scripts/deploy-full.sh'
 ```
 
 The scripts are **idempotent** — you can re-run them safely if interrupted. They skip files that already exist.
 
 > **Which tier should I pick?**
-> - **Minimal**: You just want fast variant consequence prediction + ClinVar lookups. Fits easily on an 80GB server.
-> - **Clinical**: You need dbSNP rs IDs and model organism support for a lab running human + common model organism experiments.
-> - **Full Research**: You need population frequency filtering (gnomAD) and legacy GRCh37 support. Requires a larger server (160GB SSD) or a Hetzner Volume.
+> - **Minimal** (~10 GB, ~15 min): Fast variant consequence + ClinVar. Fits on 80GB.
+> - **Clinical** (~20 GB, ~1 hour): Adds dbSNP rs IDs + Mouse/Zebrafish/Drosophila.
+> - **Full Research** (~55 GB, ~6-12 hours): Adds gnomAD v4 population frequencies + GRCh37 + 5 model organisms. **Needs CCX33 (160GB) or a Hetzner Volume.**
 
 You can always start with Minimal and upgrade later — the scripts build on each other.
 
@@ -74,14 +92,14 @@ To connect your domain from Hostinger to this server:
 3. Add or edit an **A Record**:
    - **Type**: `A`
    - **Name**: `@` (for the root domain) or `fastvep` (for a subdomain like `fastvep.yourdomain.com`).
-   - **Points to**: `87.99.149.71` (Your server IP).
+   - **Points to**: `Your.server.IP` (Your server IP).
    - **TTL**: Default (usually 14400 or 3600).
 4. Save the record. Propagation may take up to 24 hours but is usually faster.
 
 ### Initial setup
 
 ```bash
-ssh -i ~/.ssh/fastvep_key root@87.99.149.71
+ssh -i ~/.ssh/fastvep_key root@Your.server.IP
 
 # System updates
 apt update && apt upgrade -y
