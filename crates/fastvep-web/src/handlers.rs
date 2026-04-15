@@ -2,18 +2,11 @@ use axum::extract::State;
 use axum::http::header;
 use axum::response::IntoResponse;
 use axum::Json;
-use serde::Deserialize;
-use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
-use std::time::Instant;
-
-use std::sync::atomic::{AtomicU64, Ordering};
-
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, RwLock};
-use std::time::Instant;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, RwLock};
+use std::time::Instant;
 
 use crate::context::AnnotationContext;
 use crate::errors::AppError;
