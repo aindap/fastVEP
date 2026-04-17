@@ -359,22 +359,6 @@
       text-transform: none;
       letter-spacing: 0;
     }
-    /* CTA hint under annotate button */
-    .kbd-hint {
-      font-size: 11px;
-      color: var(--text-dim);
-      margin-top: 4px;
-      text-align: center;
-    }
-    .kbd-hint kbd {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 1px 5px;
-      font-family: inherit;
-      font-size: 10px;
-      color: var(--text);
-    }
     /* Empty-results notice */
     .empty-results {
       padding: 40px 24px;
@@ -752,7 +736,6 @@
             <button class="btn btn-primary" id="btnAnnotate" onclick="annotate()" style="flex:1;padding:12px 28px;font-size:15px">Annotate</button>
             <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
           </div>
-          <div class="kbd-hint">Tip: press <kbd>&#8984;</kbd>/<kbd>Ctrl</kbd>+<kbd>Enter</kbd> in the textarea to annotate</div>
           <a href="#" class="advanced-toggle" onclick="toggleAdvanced();return false" id="advancedToggle">Advanced options &#9662;</a>
           <div id="advancedOptions" style="display:none">
             <div class="control-group">
@@ -792,7 +775,11 @@
     <div class="results-section" id="resultsSection">
       <div class="results-header">
         <h2>Results</h2>
-        <button class="btn btn-secondary" onclick="downloadResults()" style="font-size:12px;padding:4px 12px;margin-left:auto">Download</button>
+        <div class="download-group" style="margin-left:auto;display:flex;align-items:center;gap:6px">
+          <span style="font-size:12px;color:var(--text-dim)">Download:</span>
+          <button class="btn btn-secondary" onclick="downloadResults('tsv')" style="font-size:12px;padding:4px 12px" title="Download results as tab-separated values">TSV</button>
+          <button class="btn btn-secondary" onclick="downloadResults('vcf')" style="font-size:12px;padding:4px 12px" title="Download results as VCF with CSQ field">VCF</button>
+        </div>
         <div class="stats">
           <div class="stat">
             <div class="stat-value" id="statVariants">0</div>
@@ -1991,8 +1978,9 @@ function renderSummary() {
     </div>`;
 }
 
-function renderRaw() {
-  const fmt = document.getElementById('outputFormat').value;
+// Render results as a text string in the requested format. Shared between
+// the Raw tab preview (renderRaw) and the Download buttons (downloadResults).
+function buildOutputText(fmt) {
   let text = '';
   // Collect SA keys across all results for consistent column order
   const allSaKeys = new Set();
@@ -2069,7 +2057,12 @@ function renderRaw() {
       text += `${r.variant.chrom}:${r.variant.start}\t${r.allele}\t${r.consequences.join(',')}\t${r.impact}\t${r.transcript?.gene?.symbol||'-'}\t${r.transcript?.gene?.id||'-'}\t${r.transcript?.id||'-'}\t${r.transcript?.biotype||'-'}\t${r.transcript?.canonical?'YES':'-'}\t${mane}\t${r.transcript?.protein_id||'-'}\t${r.transcript?.tsl!=null?r.transcript.tsl:'-'}\t${r.transcript?.ccds||'-'}\t${r.exon||'-'}\t${r.intron||'-'}\t${r.hgvsg||'-'}\t${r.hgvsc||'-'}\t${r.hgvsp||'-'}\t${r.cdna||'-'}\t${r.cds||'-'}\t${r.protein||'-'}\t${r.aa||'-'}\t${r.codons||'-'}\t${r.dist||'-'}\t${strand}${saStr}\n`;
     }
   }
-  document.getElementById('rawOutput').textContent = text;
+  return text;
+}
+
+function renderRaw() {
+  const fmt = document.getElementById('outputFormat').value;
+  document.getElementById('rawOutput').textContent = buildOutputText(fmt);
 }
 
 function switchTab(tab) {
@@ -2110,14 +2103,16 @@ function loadVcfFile(input) {
   reader.readAsText(input.files[0]);
 }
 
-function downloadResults() {
-  const fmt = document.getElementById('outputFormat').value;
+// fmt: 'tsv' | 'vcf' | 'json' — rendered from allResults regardless of the
+// Advanced-options "Output Format" select, so users can download in the
+// format they want from the results header.
+function downloadResults(fmt) {
+  fmt = fmt || 'tsv';
+  const buildFmt = fmt === 'tsv' ? 'tab' : fmt; // internal name for the TSV branch is 'tab'
   const ext = fmt === 'json' ? 'json' : fmt === 'vcf' ? 'vcf' : 'tsv';
-  const mime = fmt === 'json' ? 'application/json' : 'text/plain';
-  // Render raw output to get the text
-  renderRaw();
-  const text = document.getElementById('rawOutput').textContent;
-  const blob = new Blob([text], { type: mime });
+  const mime = fmt === 'json' ? 'application/json' : fmt === 'vcf' ? 'text/vcf' : 'text/tab-separated-values';
+  const text = buildOutputText(buildFmt);
+  const blob = new Blob([text], { type: mime + ';charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `fastvep_results.${ext}`;
