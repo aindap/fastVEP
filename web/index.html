@@ -7,9 +7,10 @@
   <meta name="description" content="fastVEP — high-performance variant effect prediction in Rust. 10–100x faster than VEP.">
   <title>fastVEP — Variant Effect Predictor</title>
 
-  <!-- Inline SVG favicon (browser tab icon). Rounded square, blue→green gradient, stylized 'fv' with arrow. -->
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%232b6cb0'/><stop offset='1' stop-color='%2334d399'/></linearGradient></defs><rect width='64' height='64' rx='14' fill='url(%23g)'/><path d='M22 16 h12 a2 2 0 0 1 0 4 h-8 v9 h6 a2 2 0 0 1 0 4 h-6 v11 a2 2 0 0 1 -4 0 V18 a2 2 0 0 1 2 -2z' fill='white'/><path d='M34 28 l6 15 l6 -15 l-4 0 l-2 7 l-2 -7z' fill='white'/><path d='M44 42 l7 0 l-3 -3 M51 42 l-3 3' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/></svg>">
-  <link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%232b6cb0'/><stop offset='1' stop-color='%2334d399'/></linearGradient></defs><rect width='64' height='64' rx='14' fill='url(%23g)'/><path d='M22 16 h12 a2 2 0 0 1 0 4 h-8 v9 h6 a2 2 0 0 1 0 4 h-6 v11 a2 2 0 0 1 -4 0 V18 a2 2 0 0 1 2 -2z' fill='white'/><path d='M34 28 l6 15 l6 -15 l-4 0 l-2 7 l-2 -7z' fill='white'/></svg>">
+  <!-- fastVEP logo. Served by the Rust backend (routes /assets/logo.png,
+       /favicon.ico, /apple-touch-icon.png) from web/assets/logo.png via include_bytes!. -->
+  <link rel="icon" type="image/png" href="/assets/logo.png">
+  <link rel="apple-touch-icon" href="/assets/logo.png">
 
   <!-- Google tag (gtag.js) replaced with user-configurable snippet if needed -->
   <!-- 
@@ -682,18 +683,7 @@
 </head>
 <body>
   <header>
-    <svg class="logo" viewBox="0 0 64 64" aria-label="fastVEP logo" role="img">
-      <defs>
-        <linearGradient id="hdr-logo-g" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#2b6cb0"/>
-          <stop offset="1" stop-color="#34d399"/>
-        </linearGradient>
-      </defs>
-      <rect width="64" height="64" rx="14" fill="url(#hdr-logo-g)"/>
-      <path d="M22 16 h12 a2 2 0 0 1 0 4 h-8 v9 h6 a2 2 0 0 1 0 4 h-6 v11 a2 2 0 0 1 -4 0 V18 a2 2 0 0 1 2 -2z" fill="white"/>
-      <path d="M34 28 l6 15 l6 -15 l-4 0 l-2 7 l-2 -7z" fill="white"/>
-      <path d="M44 42 l7 0 l-3 -3 M51 42 l-3 3" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-    </svg>
+    <img class="logo" src="/assets/logo.png" alt="fastVEP logo" width="36" height="36">
     <h1><span>fast</span>VEP</h1>
     <span class="badge">v0.1.0</span>
     <span class="spacer"></span>

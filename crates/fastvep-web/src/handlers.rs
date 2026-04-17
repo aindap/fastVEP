@@ -44,11 +44,24 @@ impl SharedState {
 pub type AppState = Arc<SharedState>;
 
 const INDEX_HTML: &str = include_str!("../../../web/index.html");
+const LOGO_PNG: &[u8] = include_bytes!("../../../web/assets/logo.png");
 
 pub async fn index_html() -> impl IntoResponse {
     (
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
         INDEX_HTML,
+    )
+}
+
+/// Serve the fastVEP logo PNG. Used as both the page logo and the browser
+/// tab favicon (via <link rel="icon"> and <link rel="apple-touch-icon">).
+pub async fn logo_png() -> impl IntoResponse {
+    (
+        [
+            (header::CONTENT_TYPE, "image/png"),
+            (header::CACHE_CONTROL, "public, max-age=86400"),
+        ],
+        LOGO_PNG,
     )
 }
 
