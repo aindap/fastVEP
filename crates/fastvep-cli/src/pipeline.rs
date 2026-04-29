@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use flate2::read::MultiGzDecoder;
 use fastvep_cache::annotation::{AnnotationProvider, AnnotationValue};
 use fastvep_cache::fasta::FastaReader;
 use fastvep_cache::gff::parse_gff3;
@@ -16,11 +17,37 @@ use fastvep_io::vcf::VcfParser;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{self, BufRead, BufWriter, Write};
+use std::io::{self, BufRead, BufWriter, Read, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 const BATCH_SIZE: usize = 1024;
+
+fn open_vcf_input_reader(input: &str) -> Result<Box<dyn io::Read>> {
+    let reader: Box<dyn io::Read> = if input == "-" {
+        Box::new(io::stdin())
+    } else {
+        Box::new(
+            File::open(input)
+                .with_context(|| format!("Opening input file: {}", input))?,
+        )
+    };
+
+    wrap_maybe_gzip_reader(reader, input)
+}
+
+fn wrap_maybe_gzip_reader(mut reader: Box<dyn io::Read>, source: &str) -> Result<Box<dyn io::Read>> {
+    let mut prefix = [0u8; 2];
+    let bytes_read = reader.read(&mut prefix)?;
+    let looks_like_gzip = bytes_read == 2 && prefix == [0x1f, 0x8b];
+
+    let replay = io::Cursor::new(prefix[..bytes_read].to_vec()).chain(reader);
+    if looks_like_gzip || (source != "-" && source.ends_with(".gz")) {
+        Ok(Box::new(MultiGzDecoder::new(replay)))
+    } else {
+        Ok(Box::new(replay))
+    }
+}
 
 pub struct AnnotateConfig {
     pub input: String,
@@ -220,15 +247,8 @@ pub fn run_annotate(config: AnnotateConfig) -> Result<()> {
     // Create consequence predictor
     let predictor = ConsequencePredictor::new(config.distance, config.distance);
 
-    // Open input VCF
-    let input_reader: Box<dyn io::Read> = if config.input == "-" {
-        Box::new(io::stdin())
-    } else {
-        Box::new(
-            File::open(&config.input)
-                .with_context(|| format!("Opening input file: {}", config.input))?,
-        )
-    };
+    // Open input VCF (supports plain text or gzipped VCF)
+    let input_reader = open_vcf_input_reader(&config.input)?;
     let mut vcf_parser = VcfParser::new(input_reader)?;
 
     // Extract sample names from VCF #CHROM header
@@ -941,6 +961,7 @@ pub fn run_annotate(config: AnnotateConfig) -> Result<()> {
                                 tv.canonical,
                                 aa.amino_acids.as_ref(),
                                 aa.protein_position.map(|(s, _)| s),
+                                aa.hgvsc.as_deref(),
                                 &aa.supplementary,
                                 &gene_anns,
                                 &vf.supplementary_annotations,
@@ -1260,6 +1281,7 @@ fn enrich_compound_het_batch(
                 tv.canonical,
                 aa.amino_acids.as_ref(),
                 aa.protein_position.map(|(s, _)| s),
+                aa.hgvsc.as_deref(),
                 &aa.supplementary,
                 &gene_anns,
                 &vf.supplementary_annotations,
@@ -1460,9 +1482,9 @@ pub fn run_cache_build(gff3_path: &str, fasta_path: Option<&str>, output_path: &
 /// Quick VCF pre-scan to collect variant regions for indexed GFF3 loading.
 /// Returns merged (chrom, start, end) regions expanded by the given distance.
 fn prescan_vcf_regions(vcf_path: &str, distance: u64) -> Result<Vec<(String, u64, u64)>> {
-    let file = File::open(vcf_path)
+    let input_reader = open_vcf_input_reader(vcf_path)
         .with_context(|| format!("Pre-scanning VCF: {}", vcf_path))?;
-    let reader = io::BufReader::new(file);
+    let reader = io::BufReader::new(input_reader);
 
     let mut regions: HashMap<String, (u64, u64)> = HashMap::new();
 
@@ -1513,6 +1535,11 @@ fn standard_chrom_map() -> (Vec<String>, std::collections::HashMap<String, u16>)
 pub fn run_sa_build(source: &str, input: &str, output: &str, assembly: &str) -> Result<()> {
     use fastvep_sa::index::IndexHeader;
     use fastvep_sa::writer::SaWriter;
+
+    // Gene-level sources (.oga) — dispatched separately from variant-level (.osa).
+    if matches!(source, "omim" | "gnomad_genes" | "gnomad_gene" | "clinvar_protein") {
+        return run_oga_build(source, input, output, assembly);
+    }
 
     let (chrom_list, chrom_map) = standard_chrom_map();
 
@@ -1658,7 +1685,7 @@ pub fn run_sa_build(source: &str, input: &str, output: &str, assembly: &str) -> 
             is_positional: false,
         },
         _ => anyhow::bail!(
-            "Unknown source: {}. Supported: clinvar, gnomad, dbsnp, cosmic, onekg, topmed, mitomap, phylop, gerp, dann, revel, spliceai, primateai, dbnsfp",
+            "Unknown source: {}. Supported: clinvar, gnomad, dbsnp, cosmic, onekg, topmed, mitomap, phylop, gerp, dann, revel, spliceai, primateai, dbnsfp, omim, gnomad_genes, clinvar_protein",
             source
         ),
     };
@@ -1701,6 +1728,83 @@ pub fn run_sa_build(source: &str, input: &str, output: &str, assembly: &str) -> 
         "Wrote: {} and {}",
         output_path.with_extension("osa").display(),
         output_path.with_extension("osa.idx").display()
+    );
+
+    Ok(())
+}
+
+/// Build a gene-level annotation database (`.oga`) from a source file.
+///
+/// Supports three gene-level sources used by the ACMG-AMP classifier:
+/// - `omim`            — OMIM `genemap2.txt` (PVS1, BS2, PM3, BP2)
+/// - `gnomad_genes`    — gnomAD constraint metrics TSV (PVS1, PP2, BP1)
+/// - `clinvar_protein` — ClinVar VCF, extracts pathogenic missense by
+///                       protein position (PS1, PM1, PM5)
+///
+/// The output is `<output>.oga`. The runtime loader at
+/// `fastvep_annotate::load_gene_providers` picks up any `.oga` file in
+/// `--sa-dir` and routes records to the classifier by `json_key`
+/// (`omim`, `gnomad_genes`, `clinvar_protein`).
+pub fn run_oga_build(source: &str, input: &str, output: &str, _assembly: &str) -> Result<()> {
+    use fastvep_sa::common::SCHEMA_VERSION;
+    use fastvep_sa::gene::{GeneHeader, GeneIndex};
+
+    let (json_key, name) = match source {
+        "omim" => ("omim", "OMIM"),
+        "gnomad_genes" | "gnomad_gene" => ("gnomad_genes", "gnomAD gene constraints"),
+        "clinvar_protein" => ("clinvar_protein", "ClinVar protein index"),
+        _ => anyhow::bail!(
+            "run_oga_build called with non-gene source: {} (expected omim, gnomad_genes, clinvar_protein)",
+            source
+        ),
+    };
+
+    eprintln!("Building {} .oga from: {}", source, input);
+
+    let file = File::open(input)
+        .with_context(|| format!("Opening input file: {}", input))?;
+    let reader: Box<dyn io::Read> = if input.ends_with(".gz") || input.ends_with(".bgz") {
+        Box::new(flate2::read::MultiGzDecoder::new(file))
+    } else {
+        Box::new(file)
+    };
+    let buf_reader = io::BufReader::new(reader);
+
+    let records = match source {
+        "omim" => fastvep_sa::sources::omim::parse_omim_genemap(buf_reader)?,
+        "gnomad_genes" | "gnomad_gene" => {
+            fastvep_sa::sources::gnomad_gene::parse_gnomad_gene_scores(buf_reader)?
+        }
+        "clinvar_protein" => {
+            fastvep_sa::sources::clinvar_protein::parse_clinvar_protein_vcf(buf_reader)?
+        }
+        _ => unreachable!(),
+    };
+
+    eprintln!("Parsed {} records from {}", records.len(), source);
+
+    let header = GeneHeader {
+        schema_version: SCHEMA_VERSION,
+        json_key: json_key.into(),
+        name: name.into(),
+        version: "latest".into(),
+        assembly: _assembly.into(),
+    };
+
+    let mut index = GeneIndex::new(header);
+    for record in records {
+        index.add(record);
+    }
+
+    let output_path = Path::new(output).with_extension("oga");
+    let mut out_file = File::create(&output_path)
+        .with_context(|| format!("Creating output file: {}", output_path.display()))?;
+    index.write_to(&mut out_file)?;
+
+    eprintln!(
+        "Wrote: {} ({} genes)",
+        output_path.display(),
+        index.gene_count()
     );
 
     Ok(())
